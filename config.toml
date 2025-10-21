@@ -1,0 +1,7 @@
+private_key = [21, 184, 88, 255, 233, 12, 84, 94, 156, 251, 68, 135, 77, 84, 63, 50, 45, 205, 218, 68, 182, 23, 154, 165, 23, 84, 87, 16, 186, 49, 211, 35]
+public_key = [252, 67, 215, 189, 24, 114, 241, 218, 87, 101, 30, 93, 104, 229, 10, 45, 140, 217, 68, 109, 77, 238, 108, 248, 186, 147, 228, 55, 193, 39, 132, 61]
+sam_port = 7656
+eepsite_key = "0ZZ0rIcb4XQqGKsNZ9uEZusmoRtXPsX6dYJsCaIS~PzRlnSshxvhdCoYqw1n24Rm6yahG1c-xfp1gmwJohL8~NGWdKyHG-F0KhirDWfbhGbrJqEbVz7F-nWCbAmiEvz80ZZ0rIcb4XQqGKsNZ9uEZusmoRtXPsX6dYJsCaIS~PzRlnSshxvhdCoYqw1n24Rm6yahG1c-xfp1gmwJohL8~NGWdKyHG-F0KhirDWfbhGbrJqEbVz7F-nWCbAmiEvz80ZZ0rIcb4XQqGKsNZ9uEZusmoRtXPsX6dYJsCaIS~PzRlnSshxvhdCoYqw1n24Rm6yahG1c-xfp1gmwJohL8~NGWdKyHG-F0KhirDWfbhGbrJqEbVz7F-nWCbAmiEvz80ZZ0rIcb4XQqGKsNZ9uEZusmoRtXPsX6dYJsCaIS~PzRlnSshxvhdCoYqw1n24Rm6yahG1c-xfp1gmwJohL8~AcEoLuHWKNnXWi1tSeTe8Rp-eO0fZK~wpc6UgphMlAkBQAEAAcAAA7K5vc6CppCkVuIt~Ez~IR9L~RIahWACTwWoqD52t4HfkKKe6FwmXro5Ph~eUxFlVtfdpj9VC62n51OiwHusS47keEk-Tliuelfyie5dwdW-ymoEmr3TqrMAzNltZgnBe-4PUtjLTXLLqXzrMUDCzfeWwi9Tc~DizvwGsi4~pDoUUFrILcPV~yhHPM1qjKBkanJxFRCqzQ-3bQ~fwyhClcIZGBmU~-xx5YXdWckOgmHzkOHx5rNXyAyVZW4Osl1L3FUjaDpkx3hnKDKoMOp2~Ucq~6oVjc0ubsz9QwsndjonHavrpGZ0-qf42zQFpk8~FTT9DPFF0qW7eZU04kPtPQvCO6s7VM7ouWMzTVm-YATHS51b~itufkPXDFpYt-qyg=="
+eepsite_address = "vovtd4soe22tti4rsqzkk46euhotzekgrnzxxdgjzffhwfwifpka.b32.i2p"
+dev_mode = false
+is_relay = false

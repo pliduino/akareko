@@ -1,0 +1,203 @@
+use std::fmt::{Display, Formatter};
+
+use serde::{Deserialize, Deserializer, Serialize};
+use surrealdb::RecordId;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+
+use crate::{
+    db::Timestamp,
+    errors::DatabaseError,
+    hash::{PrivateKey, PublicKey, Signable, Signature},
+};
+
+mod surreal;
+pub use surreal::UserRepository;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
+pub enum TrustLevel {
+    Untrusted,
+    FullTrust,
+}
+
+impl TrustLevel {
+    pub const ALL: [TrustLevel; 2] = [TrustLevel::Untrusted, TrustLevel::FullTrust];
+}
+
+impl Display for TrustLevel {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TrustLevel::Untrusted => write!(f, "Untrusted"),
+            TrustLevel::FullTrust => write!(f, "Full trust"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq, byteable_derive::Byteable)]
+pub struct I2PAddress(String);
+
+impl I2PAddress {
+    pub fn new(address: impl Into<String>) -> I2PAddress {
+        I2PAddress(address.into())
+    }
+
+    pub fn inner(&self) -> &String {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl Signable for I2PAddress {
+    fn sign(&self, private_key: &PrivateKey) -> Signature {
+        private_key.sign(self.0.as_bytes())
+    }
+
+    fn verify(&self, public_key: &PublicKey, signature: &Signature) -> bool {
+        public_key.verify(self.0.as_bytes(), signature)
+    }
+}
+
+impl Display for I2PAddress {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct User {
+    #[serde(
+        rename = "id",
+        deserialize_with = "deserialize_pubkey_id",
+        skip_serializing
+    )]
+    pub_key: PublicKey,
+    name: String,
+    timestamp: Timestamp,
+    address: Option<I2PAddress>,
+    signature: Signature,
+    trust: TrustLevel,
+}
+
+// Convert "users:<base64>" -> PublicKey
+fn deserialize_pubkey_id<'de, D>(deserializer: D) -> Result<PublicKey, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let id = RecordId::deserialize(deserializer)?;
+    let key = id.key().to_string();
+    let trimmed = key.trim_start_matches("⟨").trim_end_matches("⟩");
+
+    Ok(PublicKey::from_base64(&trimmed).unwrap())
+}
+
+impl User {
+    pub fn new(
+        name: String,
+        timestamp: u64,
+        pub_key: PublicKey,
+        signature: Signature,
+        address: Option<I2PAddress>,
+    ) -> User {
+        User {
+            pub_key,
+            name,
+            timestamp,
+            address,
+            signature,
+            trust: TrustLevel::Untrusted,
+        }
+    }
+
+    pub fn new_signed(
+        name: String,
+        timestamp: u64,
+        priv_key: &PrivateKey,
+        address: Option<I2PAddress>,
+    ) -> User {
+        let mut user = User::new(
+            name,
+            timestamp,
+            priv_key.public_key(),
+            Signature::empty(),
+            address,
+        );
+        user.sign(priv_key);
+        user
+    }
+
+    fn verification_bytes(&self) -> Vec<u8> {
+        let mut bytes = self.name.as_bytes().to_vec();
+        bytes.extend(self.timestamp.to_le_bytes());
+        bytes
+    }
+
+    fn sign(&mut self, priv_key: &PrivateKey) {
+        let to_sign = self.verification_bytes();
+        self.signature = priv_key.sign(&to_sign);
+    }
+
+    pub fn verify(&self) -> bool {
+        let to_verify = self.verification_bytes();
+        self.pub_key.verify(&to_verify, &self.signature)
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+
+    pub fn timestamp(&self) -> u64 {
+        self.timestamp
+    }
+
+    pub fn address(&self) -> &Option<I2PAddress> {
+        &self.address
+    }
+
+    pub fn set_address(&mut self, address: Option<I2PAddress>) {
+        self.address = address;
+    }
+
+    pub fn signature(&self) -> &Signature {
+        &self.signature
+    }
+
+    pub fn pub_key(&self) -> &PublicKey {
+        &self.pub_key
+    }
+
+    pub fn trust(&self) -> &TrustLevel {
+        &self.trust
+    }
+
+    pub fn set_trust(&mut self, trust: TrustLevel) {
+        self.trust = trust;
+    }
+
+    pub fn as_tuple(
+        self,
+    ) -> (
+        PublicKey,
+        String,
+        u64,
+        Option<I2PAddress>,
+        Signature,
+        TrustLevel,
+    ) {
+        (
+            self.pub_key,
+            self.name,
+            self.timestamp,
+            self.address,
+            self.signature,
+            self.trust,
+        )
+    }
+}
+
+impl Display for User {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
