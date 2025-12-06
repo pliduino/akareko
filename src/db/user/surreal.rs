@@ -72,6 +72,19 @@ impl<'a> UserRepository<'a> {
         Ok(results)
     }
 
+    pub async fn get_users(&self, pub_keys: Vec<PublicKey>) -> Result<Vec<User>, DatabaseError> {
+        let ids: Vec<RecordId> = pub_keys.iter().map(|p| RecordId::from(("users", p.to_base64()))).collect();
+
+        let results: Vec<User> = self
+            .db
+            .query("SELECT * FROM $ids")
+            .bind(("ids", ids))
+            .await?
+            .take(0)?;
+
+        Ok(results)
+    }
+
     pub async fn get_random_user(&self) -> Result<User, DatabaseError> {
         let results: Vec<User> = self.db.select("users").await.unwrap();
         let user = results.into_iter().choose(&mut rand::thread_rng());

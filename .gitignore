@@ -3,5 +3,3 @@
 /database
 ./config.toml
 /test
-.vscode
-./vcpkg

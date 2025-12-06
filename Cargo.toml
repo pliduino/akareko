@@ -2,18 +2,6 @@
 name = "aurora"
 version = "0.1.0"
 edition = "2024"
-# [lints.rust]
-# dead_code = "allow"
-
-[package.metadata.vcpkg]
-git = "https://github.com/microsoft/vcpkg"
-tag = "2025.06.13"
-dependencies = ["libtorrent"]
-
-[package.metadata.vcpkg.target]
-x86_64-pc-windows-msvc = { triplet = "x64-windows-static", dependencies = [
-    "libtorrent",
-] }
 
 [dependencies]
 tokio = { version = "1.47.1", features = [
@@ -58,17 +46,18 @@ paste = "1.0.15"
 byteable-derive = { path = "./byteable-derive" }
 cxx = "1.0.186"
 bitflags = "2.9.4"
-anawt = { path = "./anawt" }
+anawt = { git = "https://github.com/pliduino/anawt.git", branch = "develop" }
 iced = { version = "0.13.1", features = ["tokio", "image"] }
 iced_aw = "0.12.2"
 zip = "5.1.1"
 bytes = "1.10.1"
 error_set = "0.9.0"
 rclite = "0.3.0"
+lt-rs = "0.1.0"
 
-[build-dependencies]
-cxx-build = "1.0.186"
-vcpkg = "0.2.15"
+[features]
+default = []
+lto = ["anawt/lto"]
 
 [profile.release]
 lto = true
@@ -76,3 +65,4 @@ strip = true
 opt-level = 3
 panic = "abort"
 codegen-units = 1
+features = ["lto"]

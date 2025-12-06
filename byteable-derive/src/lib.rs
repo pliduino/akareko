@@ -35,7 +35,7 @@ fn derive_byteable_struct(data_struct: syn::DataStruct, name: syn::Ident) -> Tok
         FieldKind::Named => {
             let field_idents = fields
                 .iter()
-                .map(|f| (f.ident.as_ref().unwrap().clone()))
+                .map(|f| f.ident.as_ref().unwrap().clone())
                 .collect::<Vec<_>>();
 
             let encode_section = quote! {

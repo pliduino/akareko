@@ -32,7 +32,8 @@ fn main() -> Result<(), ()> {
 
     let stdout_log = fmt::layer()
         .compact()
-        .with_line_number(true)
+        .with_line_number(false)
+        .with_target(false)
         .with_timer(timer)
         .with_filter(filter);
     tracing_subscriber::registry().with(stdout_log).init();

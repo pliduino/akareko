@@ -1,7 +1,0 @@
-/target
-/data
-/database
-./config.toml
-/test
-.vscode
-./vcpkg
