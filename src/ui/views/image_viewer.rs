@@ -2,13 +2,13 @@ use std::{fs::File, io::Read, path::PathBuf};
 
 use bytes::Bytes;
 use iced::{
-    Task,
+    Length, Task,
     widget::{
-        self, Column, Scrollable, button,
+        self, Column, Scrollable, Space, button,
         canvas::Image,
-        center, column,
-        image::{self, Handle},
-        row, text, text_input,
+        center, column, container,
+        image::{self, Handle, viewer},
+        mouse_area, row, stack, text, text_input,
     },
 };
 use zip::ZipArchive;
@@ -79,10 +79,10 @@ impl ImageViewerView {
         Task::none()
     }
 
-    pub fn view(&self, state: &AppState) -> iced::Element<Message> {
+    pub fn view(&self, state: &AppState) -> iced::Element<'_, Message> {
         let image_area = if self.images.len() > 0 {
             Scrollable::new(
-                center(widget::image(self.images[self.cur_page - 1].handle.clone()))
+                center(viewer(self.images[self.cur_page - 1].handle.clone()))
                     .center_y(iced::Length::Shrink),
             )
             .width(iced::Length::Fill)
@@ -92,6 +92,13 @@ impl ImageViewerView {
                 .width(iced::Length::Fill)
                 .height(iced::Length::Fill)
         };
+        let clickable_area = container(row![
+            mouse_area(Space::new(Length::FillPortion(2), Length::Fill))
+                .on_press(ImageViewerMessage::PrevPage.into()),
+            mouse_area(Space::new(Length::FillPortion(1), Length::Fill)),
+            mouse_area(Space::new(Length::FillPortion(2), Length::Fill))
+                .on_press(ImageViewerMessage::NextPage.into())
+        ]);
 
         column![
             row![
@@ -107,7 +114,7 @@ impl ImageViewerView {
                     Some(ImageViewerMessage::NextPage.into())
                 }),
             ],
-            image_area
+            stack![image_area, clickable_area]
         ]
         .align_x(iced::alignment::Horizontal::Center)
         .width(iced::Length::Fill)

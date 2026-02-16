@@ -109,7 +109,7 @@ impl NovelView {
                                     "./data/{}/{}/{}",
                                     NovelTag::TAG,
                                     SanitizedString::new(self.novel.title()).as_str(),
-                                    chapter.signature().as_base64()
+                                    chapter.signature().as_base64_url()
                                 ),
                             }
                             .into(),
@@ -119,7 +119,7 @@ impl NovelView {
                                         "./data/{}/{}/{}/{}",
                                         NovelTag::TAG,
                                         SanitizedString::new(self.novel.title()).as_str(),
-                                        chapter.signature().as_base64(),
+                                        chapter.signature().as_base64_url(),
                                         chapter.entries()[j].path
                                     )
                                     .into(),

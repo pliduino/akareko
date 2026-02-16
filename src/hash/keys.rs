@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter};
 
+use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD};
 use ed25519_dalek::{SigningKey, ed25519::signature::SignerMut};
 use rand::rngs::OsRng;
@@ -27,6 +28,10 @@ impl Signature {
 
     pub fn as_base64(&self) -> String {
         STANDARD_NO_PAD.encode(&self.0)
+    }
+
+    pub fn as_base64_url(&self) -> String {
+        BASE64_URL_SAFE_NO_PAD.encode(&self.0)
     }
 
     pub fn from_base64(base64: &str) -> Result<Self, Base64Error> {

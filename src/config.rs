@@ -16,6 +16,7 @@ pub struct KeyPair {
     //todo: custom serialize to remove public_key
     public_key: PublicKey,
 }
+
 impl KeyPair {
     pub fn new(private_key: PrivateKey) -> Self {
         let public_key = private_key.public_key();
@@ -40,7 +41,48 @@ pub struct AuroraConfig {
 
     dev_mode: bool,
 
+    image_viewer_preferences: ImageViewerPreferences,
+
     is_relay: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ImageScale {
+    /// Image will be stretched to fit the screen
+    Fill,
+    /// Image won't get biggeer than the screen horizontally
+    FitHorizontally,
+    /// Image won't get bigger than the screen vertically
+    FitVertically,
+    /// Renders image as is
+    None,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ImageVisualizationType {
+    LeftToRight,
+    RightToLeft,
+    Scroll,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImageViewerPreferences {
+    pub double_pages: bool,
+    /// Percentage of the image size
+    pub zoom: i8,
+    pub scale: ImageScale,
+    pub visualization_type: ImageVisualizationType,
+}
+
+impl Default for ImageViewerPreferences {
+    fn default() -> Self {
+        Self {
+            double_pages: false,
+            zoom: 100,
+            scale: ImageScale::FitHorizontally,
+            visualization_type: ImageVisualizationType::LeftToRight,
+        }
+    }
 }
 
 impl Default for AuroraConfig {
@@ -52,6 +94,7 @@ impl Default for AuroraConfig {
             eepsite_address: I2PAddress::new(""),
             dev_mode: false,
             is_relay: false,
+            image_viewer_preferences: ImageViewerPreferences::default(),
         }
     }
 }

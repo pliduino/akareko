@@ -189,7 +189,7 @@ impl Repositories {
         Ok(tagged_contents)
     }
 
-    pub async fn user(&self) -> UserRepository {
+    pub async fn user(&self) -> UserRepository<'_> {
         UserRepository::new(&self.db)
     }
 

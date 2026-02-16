@@ -54,9 +54,9 @@ impl<'a> PostRepository<'a> {
                 SELECT *
                 FROM {0}
                 WHERE topic = $topic
+                ORDER BY timestamp ASC
                 LIMIT $take
                 START $skip
-                ORDER BY timestamp ASC
             );
 
             LET $sources = $rows.map(|$r| $r.source);
