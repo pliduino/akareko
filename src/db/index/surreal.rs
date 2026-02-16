@@ -1,11 +1,12 @@
 use std::marker::PhantomData;
 
+use const_format::formatcp;
 use serde::{Deserialize, Serialize};
 use surrealdb::{RecordId, Surreal, engine::local::Db};
 use tracing::info;
 
 use crate::{
-    db::{Content, Index, IndexTag, Repositories},
+    db::{Content, Index, IndexTag},
     errors::DatabaseError,
     hash::{Hash, PublicKey, Signature},
 };
@@ -51,7 +52,7 @@ impl<T: IndexTag> Into<Index<T>> for IndexSurrealDb {
         } = self;
 
         let key = &id.key().to_string();
-        let trimmed = key.trim_start_matches("⟨").trim_end_matches("⟩");
+        let trimmed = key.trim_start_matches("`").trim_end_matches("`");
 
         Index {
             hash: Hash::from_base64(trimmed).unwrap(),
@@ -129,12 +130,13 @@ impl<'a> IndexRepository<'a> {
     }
 
     pub async fn get_contents<T: IndexTag>(&self, index_hash: Hash) -> Vec<Content<T>> {
+        let query: String = format!(
+            "SELECT * FROM {} WHERE index_hash = $index_hash",
+            T::CONTENT_TABLE
+        );
         let chapters: Vec<Content<T>> = self
             .db
-            .query(format!(
-                "SELECT * FROM {} WHERE index_hash = $index_hash",
-                T::CONTENT_TABLE
-            ))
+            .query(query)
             .bind(("index_hash", index_hash))
             .await
             .unwrap()

@@ -16,7 +16,7 @@ use crate::{
     db::{
         Content, Index, IndexTag, Repositories, TaggedIndex,
         index::{NovelTag, TaggedContent},
-        user::{I2PAddress, User, UserRepository},
+        user::{I2PAddress, TrustLevel, User, UserRepository},
     },
     errors::ClientError,
     hash::{Hash, PublicKey, Signable},
@@ -35,6 +35,7 @@ use crate::{
 #[derive(Clone)]
 pub struct AuroraClient {
     repositories: Repositories,
+    host_address: I2PAddress,
     session: Arc<Mutex<Session<style::Stream>>>,
 }
 
@@ -60,6 +61,7 @@ impl AuroraClient {
         Self {
             repositories,
             session,
+            host_address: config.eepsite_address().clone(),
         }
     }
 
@@ -103,6 +105,10 @@ impl AuroraClient {
         let mut indexes: Vec<Index<T>> = Vec::with_capacity(payload.indexes.len());
 
         for index in payload.indexes {
+            if !index.verify() {
+                error!("Invalid index signature");
+                continue;
+            }
             match index {
                 TaggedIndex::Novel(index) => {
                     if T::TAG == NovelTag::TAG {
@@ -122,9 +128,9 @@ impl AuroraClient {
     pub async fn routine_exchange(&mut self, url: &I2PAddress) -> Result<(), ClientError> {
         let mut stream = self.get_stream(url).await?;
 
-        let who = Self::who_internal(&mut stream, url).await?;
+        let who = self.who_internal(&mut stream).await?;
 
-        self.repositories.user().upsert_user(who).await?;
+        self.repositories.user().await.upsert_user(who).await?;
 
         let response = handler::index::ExchangeContent::request(
             ExchangeContentRequest { count: 10 },
@@ -143,6 +149,7 @@ impl AuroraClient {
                     match self
                         .repositories
                         .index()
+                        .await
                         .get_index::<NovelTag>(content.index_hash())
                         .await
                     {
@@ -175,9 +182,13 @@ impl AuroraClient {
         .payload_if_ok()?;
 
         for index in response.indexes {
+            if !index.verify() {
+                error!("Invalid index signature");
+                continue;
+            }
             match index {
                 TaggedIndex::Novel(index) => {
-                    match self.repositories.index().add_index(index).await {
+                    match self.repositories.index().await.add_index(index).await {
                         Ok(i) => {
                             existing_indexes.insert(i.hash().clone());
                         }
@@ -194,9 +205,13 @@ impl AuroraClient {
                 continue;
             }
 
+            if !content.verify() {
+                error!("Invalid content signature");
+                continue;
+            }
             match content {
                 TaggedContent::Novel(content) => {
-                    match self.repositories.index().add_content(content).await {
+                    match self.repositories.index().await.add_content(content).await {
                         Ok(_) => {}
                         Err(e) => {
                             error!("Failed to add content: {}", e);
@@ -213,11 +228,15 @@ impl AuroraClient {
     // ║                                   User                                    ║
     // ╚===========================================================================╝
 
-    async fn who_internal(
-        stream: &mut LoggingStream<Stream>,
-        url: &I2PAddress,
-    ) -> Result<User, ClientError> {
-        let res = handler::users::Who::request(WhoRequest {}, stream).await?;
+    /// Who function without creating a new stream
+    async fn who_internal(&self, stream: &mut LoggingStream<Stream>) -> Result<User, ClientError> {
+        let res = handler::users::Who::request(
+            WhoRequest {
+                request_address: self.host_address.clone(),
+            },
+            stream,
+        )
+        .await?;
 
         if !res.status().is_ok() {
             return Err(ClientError::UnexpectedResponseCode {
@@ -229,24 +248,23 @@ impl AuroraClient {
             return Err(ClientError::MissingPayload);
         };
 
-        if !payload
-            .address
-            .verify(&payload.user.pub_key, &payload.address_signature)
-        {
+        if !payload.verify(&self.host_address) {
             return Err(ClientError::InvalidSignature);
         }
 
         let mut user = payload.user.as_user();
+        if !user.verify() {
+            return Err(ClientError::InvalidSignature);
+        }
 
-        user.set_address(Some(url.clone()));
+        user.set_trust(TrustLevel::Untrusted);
 
         Ok(user)
     }
 
     pub async fn who(&mut self, url: &I2PAddress) -> Result<User, ClientError> {
         let mut stream = self.get_stream(url).await?;
-
-        Self::who_internal(&mut stream, url).await
+        self.who_internal(&mut stream).await
     }
 
     pub async fn request_users(

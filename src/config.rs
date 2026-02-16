@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tracing::{error, warn};
-use yosemite::RouterApi;
+use yosemite::{I2pError, RouterApi};
 
 use crate::{
     db::user::I2PAddress,
@@ -13,7 +13,7 @@ use crate::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyPair {
     private_key: PrivateKey,
-    //TODO: custom serialize to remove public_key
+    //todo: custom serialize to remove public_key
     public_key: PublicKey,
 }
 impl KeyPair {
@@ -68,7 +68,7 @@ impl AuroraConfig {
         (b32_from_pub_b64(&destination).unwrap(), private_key)
     }
 
-    /// Can't fail, if the config is missing or is invalid it will just be created
+    /// can't fail, if the config is missing or is invalid it will just be created
     /// anyways
     pub async fn load() -> AuroraConfig {
         let mut should_save = false;
@@ -77,12 +77,12 @@ impl AuroraConfig {
             Ok(config_str) => match toml::from_str(&config_str) {
                 Ok(config) => config,
                 Err(e) => {
-                    error!("Error loading config: {}", e);
+                    error!("error loading config: {}", e);
                     AuroraConfig::default()
                 }
             },
             Err(e) => {
-                warn!("Error opening config file: {}", e);
+                warn!("error opening config file: {}", e);
                 should_save = true;
                 AuroraConfig::default()
             }
@@ -98,7 +98,7 @@ impl AuroraConfig {
             match config.save().await {
                 Ok(_) => {}
                 Err(e) => {
-                    error!("Error saving config: {}", e);
+                    error!("error saving config: {}", e);
                 }
             }
         }

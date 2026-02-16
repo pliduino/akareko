@@ -18,7 +18,7 @@ impl AuroraProtocolCommand for GetAllIndexes {
     ) -> AuroraProtocolResponse<Self::ResponsePayload> {
         match req.tag.as_str() {
             NovelTag::TAG => {
-                let indexes = state.repositories.index().get_indexes().await;
+                let indexes = state.repositories.index().await.get_indexes().await;
                 AuroraProtocolResponse::ok(GetAllIndexesResponse {
                     indexes: indexes.into_iter().map(TaggedIndex::from).collect(),
                 })

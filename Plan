@@ -1,18 +1,19 @@
 Descriptions by users, get from X familiar nodes and display
-Same for covers
-Site for upload only, you can create a user and upload directly to the main node
 
-Brokers for faster transactions
+Same for covers
+
+Site for upload only, you can create a user and upload directly to the main node
 
 Watch party for less popular stuff low on seeders
 
 Delete database without deleting config -> Recreating the db doesn't restore the default user
 
 Double page mode (check image proportion), strip mode
+Zoom in/out
 preload pages
 
 Change name on config
 
 Content that's only different by the timestamp gets replaced with the newer one
 
-Social hubs - 
+Implement groups in a way that we could revoke access to posting on it without needing all members that post to have the main key

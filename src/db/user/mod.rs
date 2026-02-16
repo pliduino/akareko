@@ -10,23 +10,43 @@ use crate::{
     hash::{PrivateKey, PublicKey, Signable, Signature},
 };
 
+#[cfg(feature = "sqlite")]
+mod sqlite;
+#[cfg(feature = "sqlite")]
+pub use sqlite::UserRepository;
+#[cfg(feature = "surrealdb")]
 mod surreal;
+#[cfg(feature = "surrealdb")]
 pub use surreal::UserRepository;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
+#[repr(u8)]
 pub enum TrustLevel {
-    Untrusted,
-    FullTrust,
+    Ignore,     // Been proven to falsify data, also used for your own user
+    Unverified, // Default for users we haven't verified the address
+    Untrusted,  // Default for users we have verified the address
+    Trusted,
+    FullTrust, // Set manually for sources
 }
 
 impl TrustLevel {
-    pub const ALL: [TrustLevel; 2] = [TrustLevel::Untrusted, TrustLevel::FullTrust];
+    /// Used for selecting in UI
+    pub const ALL: [TrustLevel; 5] = [
+        TrustLevel::Ignore,
+        TrustLevel::Unverified,
+        TrustLevel::Untrusted,
+        TrustLevel::Trusted,
+        TrustLevel::FullTrust,
+    ];
 }
 
 impl Display for TrustLevel {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            TrustLevel::Ignore => write!(f, "Ignored"),
+            TrustLevel::Unverified => write!(f, "Unverified"),
             TrustLevel::Untrusted => write!(f, "Untrusted"),
+            TrustLevel::Trusted => write!(f, "Trusted"),
             TrustLevel::FullTrust => write!(f, "Full trust"),
         }
     }
@@ -67,38 +87,81 @@ impl Display for I2PAddress {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
-    #[serde(
-        rename = "id",
-        deserialize_with = "deserialize_pubkey_id",
-        skip_serializing
+    #[cfg_attr(
+        feature = "surrealdb",
+        serde(
+            rename = "id",
+            deserialize_with = "deserialize_pubkey_id",
+            skip_serializing
+        )
     )]
     pub_key: PublicKey,
     name: String,
     timestamp: Timestamp,
-    address: Option<I2PAddress>,
     signature: Signature,
+    /// To prevent a user from faking the address of another user we need to  confirm the address
+    /// by directly querying the address and asking for confirmation.
+    /// To check if the address has been confirmed, we check the trust level.
+    address: I2PAddress,
+
+    // Unsigned fields
     trust: TrustLevel,
 }
 
-// Convert "users:<base64>" -> PublicKey
-fn deserialize_pubkey_id<'de, D>(deserializer: D) -> Result<PublicKey, D::Error>
+// Convert "<table>:<base64>" -> PublicKey
+pub fn deserialize_pubkey_id<'de, D>(deserializer: D) -> Result<PublicKey, D::Error>
 where
     D: Deserializer<'de>,
 {
     let id = RecordId::deserialize(deserializer)?;
     let key = id.key().to_string();
-    let trimmed = key.trim_start_matches("⟨").trim_end_matches("⟩");
+    let trimmed = key.trim_start_matches("`").trim_end_matches("`");
 
-    Ok(PublicKey::from_base64(&trimmed).unwrap())
+    PublicKey::from_base64(&trimmed)
+        .map_err(|e| serde::de::Error::custom(format!("Invalid public key: {}", e)))
+}
+
+pub fn deserialize_signature_id<'de, D>(deserializer: D) -> Result<Signature, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let id = RecordId::deserialize(deserializer)?;
+    let key = id.key().to_string();
+    let trimmed = key.trim_start_matches("`").trim_end_matches("`");
+
+    Signature::from_base64(&trimmed)
+        .map_err(|e| serde::de::Error::custom(format!("Invalid signature: {}", e)))
+}
+
+impl std::hash::Hash for User {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.pub_key.hash(state);
+    }
+}
+
+impl PartialEq for User {
+    fn eq(&self, other: &Self) -> bool {
+        self.pub_key == other.pub_key
+    }
+}
+
+impl Eq for User {}
+
+impl std::borrow::Borrow<PublicKey> for User {
+    fn borrow(&self) -> &PublicKey {
+        &self.pub_key
+    }
 }
 
 impl User {
+    pub const TABLE_NAME: &str = "users";
+
     pub fn new(
         name: String,
         timestamp: u64,
         pub_key: PublicKey,
         signature: Signature,
-        address: Option<I2PAddress>,
+        address: I2PAddress,
     ) -> User {
         User {
             pub_key,
@@ -106,7 +169,7 @@ impl User {
             timestamp,
             address,
             signature,
-            trust: TrustLevel::Untrusted,
+            trust: TrustLevel::Unverified,
         }
     }
 
@@ -114,7 +177,7 @@ impl User {
         name: String,
         timestamp: u64,
         priv_key: &PrivateKey,
-        address: Option<I2PAddress>,
+        address: I2PAddress,
     ) -> User {
         let mut user = User::new(
             name,
@@ -127,9 +190,10 @@ impl User {
         user
     }
 
-    fn verification_bytes(&self) -> Vec<u8> {
+    pub fn verification_bytes(&self) -> Vec<u8> {
         let mut bytes = self.name.as_bytes().to_vec();
         bytes.extend(self.timestamp.to_le_bytes());
+        bytes.extend(self.address.inner().as_bytes());
         bytes
     }
 
@@ -151,11 +215,11 @@ impl User {
         self.timestamp
     }
 
-    pub fn address(&self) -> &Option<I2PAddress> {
+    pub fn address(&self) -> &I2PAddress {
         &self.address
     }
 
-    pub fn set_address(&mut self, address: Option<I2PAddress>) {
+    pub fn set_address(&mut self, address: I2PAddress) {
         self.address = address;
     }
 
@@ -175,16 +239,7 @@ impl User {
         self.trust = trust;
     }
 
-    pub fn as_tuple(
-        self,
-    ) -> (
-        PublicKey,
-        String,
-        u64,
-        Option<I2PAddress>,
-        Signature,
-        TrustLevel,
-    ) {
+    pub fn as_tuple(self) -> (PublicKey, String, u64, I2PAddress, Signature, TrustLevel) {
         (
             self.pub_key,
             self.name,

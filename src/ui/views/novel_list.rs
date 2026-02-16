@@ -40,21 +40,23 @@ impl NovelListView {
             let repositories = repositories.clone();
 
             return Task::future(async move {
-                let novels = repositories.index().get_indexes().await;
+                let novels = repositories.index().await.get_indexes().await;
                 NovelListMessage::LoadedNovels(novels).into()
             });
         }
         Task::none()
     }
 
-    pub fn view(&self, state: &AppState) -> iced::Element<Message> {
+    pub fn view(&self, state: &AppState) -> iced::Element<'_, Message> {
         let mut column: Vec<iced::Element<Message>> = vec![text("Novels").into()];
 
-        column.push(
-            button(text("Add Novel"))
-                .on_press(Message::ChangeView(View::AddNovel(AddNovelView::new())))
-                .into(),
-        );
+        if state.config.dev_mode() {
+            column.push(
+                button(text("Add Novel"))
+                    .on_press(Message::ChangeView(View::AddNovel(AddNovelView::new())))
+                    .into(),
+            );
+        }
 
         for novel in self.novels.iter() {
             column.push(

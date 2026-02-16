@@ -18,7 +18,13 @@ impl AuroraProtocolCommand for GetUsers {
         req: Self::RequestPayload,
         state: &ServerState,
     ) -> AuroraProtocolResponse<Self::ResponsePayload> {
-        let users = match state.repositories.user().get_users(req.pub_keys).await {
+        let users = match state
+            .repositories
+            .user()
+            .await
+            .get_users(req.pub_keys)
+            .await
+        {
             Ok(users) => users,
             Err(_) => {
                 return AuroraProtocolResponse::internal_error("Failed to get users".to_string());

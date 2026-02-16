@@ -17,36 +17,16 @@ impl<'a> UserRepository<'a> {
 }
 
 impl<'a> UserRepository<'a> {
-    pub async fn upsert_user(&self, users: User) -> Result<User, DatabaseError> {
-        // if user.verify() {
-        //     return Err(DatabaseError::InvalidSignature);
-        // }
-
+    pub async fn upsert_user(&self, user: User) -> Result<User, DatabaseError> {
         let result: Option<User> = self
             .db
-            .upsert(("users", users.pub_key().to_base64()))
-            .content(users)
-            .await?;
-
-        match result {
-            Some(user) => {
-                info!("Created user: {}", user.name());
-                Ok(user)
-            }
-            None => Err(DatabaseError::Unknown),
-        }
-    }
-
-    pub async fn update_user(&self, user: User) -> Result<User, DatabaseError> {
-        let result: Option<User> = self
-            .db
-            .update(("users", user.pub_key().to_base64()))
+            .upsert((User::TABLE_NAME, user.pub_key().to_base64()))
             .content(user)
             .await?;
 
         match result {
             Some(user) => {
-                info!("Updated user: {}", user.name());
+                info!("Created user: {}", user.name());
                 Ok(user)
             }
             None => Err(DatabaseError::Unknown),
@@ -73,7 +53,10 @@ impl<'a> UserRepository<'a> {
     }
 
     pub async fn get_users(&self, pub_keys: Vec<PublicKey>) -> Result<Vec<User>, DatabaseError> {
-        let ids: Vec<RecordId> = pub_keys.iter().map(|p| RecordId::from(("users", p.to_base64()))).collect();
+        let ids: Vec<RecordId> = pub_keys
+            .iter()
+            .map(|p| RecordId::from(("users", p.to_base64())))
+            .collect();
 
         let results: Vec<User> = self
             .db
@@ -88,10 +71,7 @@ impl<'a> UserRepository<'a> {
     pub async fn get_random_user(&self) -> Result<User, DatabaseError> {
         let results: Vec<User> = self.db.select("users").await.unwrap();
         let user = results.into_iter().choose(&mut rand::thread_rng());
-        match user {
-            Some(user) => Ok(user),
-            None => Err(DatabaseError::Unknown),
-        }
+        user.ok_or(DatabaseError::Unknown)
     }
 
     pub async fn get_all_users(&self) -> Vec<User> {

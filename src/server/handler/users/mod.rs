@@ -1,10 +1,6 @@
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-
 use crate::{
-    db::user::User,
-    errors::{DecodeError, EncodeError},
+    db::user::{I2PAddress, User},
     hash::{PublicKey, Signature},
-    helpers::Byteable,
 };
 
 pub mod get_users;
@@ -18,6 +14,7 @@ pub struct UserResponse {
     pub name: String,
     pub signature: Signature,
     pub timestamp: u64,
+    pub address: I2PAddress,
 }
 
 impl UserResponse {
@@ -27,20 +24,21 @@ impl UserResponse {
             self.timestamp,
             self.pub_key,
             self.signature,
-            None,
+            self.address,
         )
     }
 }
 
 impl From<User> for UserResponse {
     fn from(user: User) -> Self {
-        let (pub_key, name, timestamp, _, signature, _) = user.as_tuple();
+        let (pub_key, name, timestamp, address, signature, _) = user.as_tuple();
 
         UserResponse {
-            pub_key: pub_key,
-            name: name,
-            signature: signature,
-            timestamp: timestamp,
+            pub_key,
+            name,
+            signature,
+            timestamp,
+            address,
         }
     }
 }

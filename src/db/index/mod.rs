@@ -8,7 +8,14 @@ use crate::{
     helpers::{Byteable, Language},
 };
 
+#[cfg(feature = "sqlite")]
+mod sqlite;
+#[cfg(feature = "sqlite")]
+pub use sqlite::IndexRepository;
+
+#[cfg(feature = "surrealdb")]
 mod surreal;
+#[cfg(feature = "surrealdb")]
 pub use surreal::IndexRepository;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +37,12 @@ impl TaggedContent {
     pub fn index_hash(&self) -> &Hash {
         match self {
             TaggedContent::Novel(content) => content.index_hash(),
+        }
+    }
+
+    pub fn verify(&self) -> bool {
+        match self {
+            TaggedContent::Novel(content) => content.verify(),
         }
     }
 }
@@ -70,15 +83,11 @@ impl Byteable for TaggedContent {
 #[derive(Debug, Clone, Serialize, Deserialize, byteable_derive::Byteable)]
 pub struct NovelChapter {
     pub language: Language,
-    pub is_read: bool,
 }
 
 impl NovelChapter {
     pub fn new(language: Language) -> NovelChapter {
-        NovelChapter {
-            language,
-            is_read: false,
-        }
+        NovelChapter { language }
     }
 }
 
@@ -86,7 +95,6 @@ impl ToBytes for NovelChapter {
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
         bytes.extend((self.language.clone() as u16).to_be_bytes());
-        bytes.push(self.is_read as u8);
         bytes
     }
 }

@@ -11,7 +11,6 @@ use iced::{
         row, text, text_input,
     },
 };
-use tracing::info;
 use zip::ZipArchive;
 
 use crate::{

@@ -22,6 +22,10 @@ mod helpers;
 mod models;
 mod server;
 mod ui;
+mod embedded {
+    use refinery::embed_migrations;
+    embed_migrations!("./migrations/sqlite");
+}
 
 fn main() -> Result<(), ()> {
     let format = time::format_description::parse("[hour]:[minute]:[second]").expect("Cataplum");

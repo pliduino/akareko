@@ -1,18 +1,21 @@
 use anawt::{AnawtTorrentStatus, InfoHash, TorrentState};
 use iced::{
-    Task,
-    widget::{Column, button, row, text},
+    Length, Task,
+    widget::{Column, button, image, row, svg, text},
 };
 use tokio::sync::watch;
 use tracing::info;
 
 use crate::{
-    db::{Content, Index, index::NovelTag},
+    db::{Content, Index, IndexTag, comments::Topic, index::NovelTag},
+    hash::Hash,
     helpers::SanitizedString,
     ui::{
         AppState, Message,
+        icons::{CHAT_ICON, SEEN_ICON, UNSEEN_ICON},
         views::{
             View, ViewMessage, add_chapter::AddNovelChapterView, image_viewer::ImageViewerView,
+            post::PostView,
         },
     },
 };
@@ -26,10 +29,11 @@ pub struct NovelView {
 
 #[derive(Debug, Clone)]
 pub enum NovelMessage {
-    ChaptersLoaded(Vec<Content<NovelTag>>),
+    ContentLoaded(Vec<Content<NovelTag>>),
     LoadedTorrentWatcher(Vec<Option<watch::Receiver<AnawtTorrentStatus>>>),
     ReloadTorrents,
     DownloadTorrentAndReload { magnet: String, path: String },
+    UpdateProgress(usize, usize, f32),
     TorrentStatusUpdated,
 }
 
@@ -54,8 +58,8 @@ impl NovelView {
                 let repositories = repositories.clone();
                 let novel_hash = v.novel.hash().clone();
                 return Task::future(async move {
-                    let chapters = repositories.index().get_contents(novel_hash).await;
-                    NovelMessage::ChaptersLoaded(chapters).into()
+                    let chapters = repositories.index().await.get_contents(novel_hash).await;
+                    NovelMessage::ContentLoaded(chapters).into()
                 });
             }
         }
@@ -76,63 +80,77 @@ impl NovelView {
         for i in 0..self.chapters.len() {
             let chapter = &self.chapters[i];
             let rx = self.torrents[i].as_ref();
-            match rx {
+            enum ClickMessageType {
+                Nothing,
+                Download,
+                Read,
+            }
+            let select_message: ClickMessageType = match rx {
                 Some(rx) => {
                     let status = rx.borrow();
 
-                    match &status.state {
-                        TorrentState::Finished | TorrentState::Seeding => {
-                            for e in chapter.entries() {
-                                column.push(
-                                    row![
-                                        button(text(e.title.clone())).on_press(
-                                            Message::ChangeView(View::ImageViewer(
-                                                ImageViewerView::new(
-                                                    format!(
-                                                        "./data/novel/{}/{}/{}",
-                                                        SanitizedString::new(self.novel.title())
-                                                            .as_str(),
-                                                        chapter.signature().as_base64(),
-                                                        chapter.entries()[i].path
-                                                    )
-                                                    .into()
-                                                ),
-                                            ))
-                                        )
-                                    ]
-                                    .into(),
-                                );
-                            }
-                            // column.push(row![button(text(chapter.title.clone()))].into());
-                        }
-                        _ => {
-                            column.push(
-                                row![
-                                    // button(text(chapter.title.clone())),
-                                    text(format!("Downloading: {:.1}", status.progress * 100.0))
-                                ]
-                                .into(),
-                            );
-                        }
+                    match status.state {
+                        TorrentState::Finished | TorrentState::Seeding => ClickMessageType::Read,
+                        _ => ClickMessageType::Nothing,
                     }
                 }
-                None => {
-                    column.push(
-                        button(text("Download"))
-                            .on_press(
-                                NovelMessage::DownloadTorrentAndReload {
-                                    magnet: chapter.magnet_link.clone().0,
-                                    path: format!(
-                                        "./data/novel/{}/{}",
-                                        SanitizedString::new(self.novel.title()).as_str(),
-                                        chapter.signature().as_base64()
-                                    ),
-                                }
-                                .into(),
-                            )
+                None => ClickMessageType::Download,
+            };
+
+            //         text(format!("Downloading: {:.1}", status.progress * 100.0))
+            for (j, e) in chapter.entries().iter().enumerate() {
+                column.push(
+                    row![
+                        button(text(e.title.clone())).on_press(match select_message {
+                            ClickMessageType::Nothing => Message::Nothing,
+                            ClickMessageType::Download => NovelMessage::DownloadTorrentAndReload {
+                                magnet: chapter.magnet_link.clone().0,
+                                path: format!(
+                                    "./data/{}/{}/{}",
+                                    NovelTag::TAG,
+                                    SanitizedString::new(self.novel.title()).as_str(),
+                                    chapter.signature().as_base64()
+                                ),
+                            }
                             .into(),
-                    );
-                }
+                            ClickMessageType::Read =>
+                                Message::ChangeView(View::ImageViewer(ImageViewerView::new(
+                                    format!(
+                                        "./data/{}/{}/{}/{}",
+                                        NovelTag::TAG,
+                                        SanitizedString::new(self.novel.title()).as_str(),
+                                        chapter.signature().as_base64(),
+                                        chapter.entries()[j].path
+                                    )
+                                    .into(),
+                                ))),
+                        }),
+                        if e.progress < 1.0 {
+                            button(
+                                svg(svg::Handle::from_memory(UNSEEN_ICON))
+                                    .height(Length::Fixed(32.0))
+                                    .width(Length::Fixed(32.0)),
+                            )
+                            .on_press(NovelMessage::UpdateProgress(j, i, 1.0).into())
+                        } else {
+                            button(
+                                svg(svg::Handle::from_memory(SEEN_ICON))
+                                    .height(Length::Fixed(32.0))
+                                    .width(Length::Fixed(32.0)),
+                            )
+                            .on_press(NovelMessage::UpdateProgress(j, i, 0.0).into())
+                        },
+                        button(
+                            svg(svg::Handle::from_memory(CHAT_ICON))
+                                .height(Length::Fixed(32.0))
+                                .width(Length::Fixed(32.0))
+                        )
+                        .on_press(Message::ChangeView(View::Post(
+                            PostView::new(Topic::from_entry(&self.novel, e.enumeration))
+                        )))
+                    ]
+                    .into(),
+                );
             }
         }
 
@@ -142,10 +160,13 @@ impl NovelView {
     pub fn update(m: NovelMessage, state: &mut AppState) -> Task<Message> {
         if let View::Novel(v) = &mut state.view {
             match m {
-                NovelMessage::ChaptersLoaded(chapters) => {
+                NovelMessage::ContentLoaded(chapters) => {
                     v.torrents = vec![None; chapters.len()];
                     v.chapters = chapters;
                     return Task::done(NovelMessage::ReloadTorrents.into());
+                }
+                NovelMessage::UpdateProgress(j, i, p) => {
+                    v.chapters[i].update_entry_progress(j, p);
                 }
                 NovelMessage::LoadedTorrentWatcher(watchers) => {
                     info!("Loaded torrent watcher");

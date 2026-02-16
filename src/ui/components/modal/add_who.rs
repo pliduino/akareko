@@ -61,13 +61,7 @@ impl AddWhoModal {
             return container(column![
                 row![text(format!("Name: {}", user.name().clone()))],
                 row![text(format!("Pub Key: {}", user.pub_key().to_base64()))],
-                row![text(format!(
-                    "I2P Address: {}",
-                    match user.address() {
-                        Some(addr) => addr.to_string(),
-                        None => "None".to_string(),
-                    }
-                ))],
+                row![text(format!("I2P Address: {}", user.address().to_string()))],
                 pick_list(TrustLevel::ALL, Some(user.trust()), |t| {
                     AddWhoModalMessage::UpdateTrust(t).into()
                 }),
@@ -122,7 +116,7 @@ impl AddWhoModal {
                         if let Some(repositories) = &state.repositories {
                             let repository = repositories.clone();
                             return Task::future(async move {
-                                repository.user().upsert_user(user).await.unwrap();
+                                repository.user().await.upsert_user(user).await.unwrap();
                                 AddWhoModalMessage::AddedUser.into()
                             });
                         }

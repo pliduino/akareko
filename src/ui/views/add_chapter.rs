@@ -5,7 +5,7 @@ use iced::{
 
 use crate::{
     db::{
-        Content, ContentEntry, ContentReadType, Index, Magnet,
+        Content, ContentEntry, Index, Magnet,
         index::{NovelChapter, NovelTag},
     },
     helpers::{Language, now_timestamp},
@@ -113,8 +113,8 @@ impl AddNovelChapterView {
                                 title: e.title.clone(),
                                 enumeration: e.enumeration,
                                 path: e.path.clone(),
-                                ty: ContentReadType::SingleFile,
                                 content: NovelChapter::new(Language::English),
+                                progress: 0.0,
                             })
                             .collect();
 
@@ -129,7 +129,7 @@ impl AddNovelChapterView {
 
                         let repositories = repositories.clone();
                         return Task::future(async move {
-                            match repositories.index().add_content(chapter).await {
+                            match repositories.index().await.add_content(chapter).await {
                                 Ok(_) => {}
                                 Err(e) => {
                                     println!("Error adding chapter: {}", e);

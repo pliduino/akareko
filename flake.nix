@@ -4,12 +4,17 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
     {
       self,
       nixpkgs,
+      fenix,
       flake-utils,
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -27,8 +32,12 @@
         devShell = pkgs.mkShell {
           packages = with pkgs; [
             cargo
-            rustfmt
+            clang
             clang-tools
+            rust-analyzer
+            rustc
+            rustfmt
+
             boost
             boost-build
           ];
@@ -39,6 +48,8 @@
 
           nativeBuildInputs = with pkgs; [
           ];
+
+          RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
 
           env.RUSTFLAGS = "-C link-arg=-Wl,-rpath,${pkgs.lib.makeLibraryPath dlopenLibraries}";
         };

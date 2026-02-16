@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Data, DeriveInput, parse_macro_input};
+use syn::{Data, DeriveInput, Index, parse_macro_input};
 
 #[proc_macro_derive(Byteable)]
 pub fn derive_byteable(input: TokenStream) -> TokenStream {
@@ -55,7 +55,7 @@ fn derive_byteable_struct(data_struct: syn::DataStruct, name: syn::Ident) -> Tok
             (encode_section, decode_section)
         }
         FieldKind::Unnamed => {
-            let enumeration = (0..types.len()).collect::<Vec<_>>();
+            let enumeration = (0..types.len()).map(|i| Index::from(i)).collect::<Vec<_>>();
             let encode_section = quote! {
                 #(
                     self.#enumeration.encode(writer).await?;

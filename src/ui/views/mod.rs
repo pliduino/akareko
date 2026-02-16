@@ -4,25 +4,24 @@ pub mod home;
 pub mod image_viewer;
 pub mod novel;
 pub mod novel_list;
+pub mod post;
 pub mod settings;
 pub mod user_list;
 
 use iced::Task;
 
-use crate::{
-    db::Repositories,
-    ui::{
-        AppState, Message,
-        views::{
-            add_chapter::{AddNovelChapterMessage, AddNovelChapterView},
-            add_novel::{AddNovelMessage, AddNovelView},
-            home::{HomeMessage, HomeView},
-            image_viewer::{ImageViewerMessage, ImageViewerView},
-            novel::{NovelMessage, NovelView},
-            novel_list::{NovelListMessage, NovelListView},
-            settings::{SettingsMessage, SettingsView},
-            user_list::{UserListMessage, UserListView},
-        },
+use crate::ui::{
+    AppState, Message,
+    views::{
+        add_chapter::{AddNovelChapterMessage, AddNovelChapterView},
+        add_novel::{AddNovelMessage, AddNovelView},
+        home::{HomeMessage, HomeView},
+        image_viewer::{ImageViewerMessage, ImageViewerView},
+        novel::{NovelMessage, NovelView},
+        novel_list::{NovelListMessage, NovelListView},
+        post::{PostMessage, PostView},
+        settings::{SettingsMessage, SettingsView},
+        user_list::{UserListMessage, UserListView},
     },
 };
 
@@ -36,6 +35,7 @@ pub enum View {
     Settings(SettingsView),
     ImageViewer(ImageViewerView),
     UserList(UserListView),
+    Post(PostView),
 }
 
 #[derive(Debug, Clone)]
@@ -48,6 +48,7 @@ pub enum ViewMessage {
     Settings(SettingsMessage),
     ImageViewer(ImageViewerMessage),
     UserList(UserListMessage),
+    Post(PostMessage),
 }
 
 impl View {
@@ -61,10 +62,11 @@ impl View {
             View::Settings(_) => SettingsView::on_enter(state),
             View::ImageViewer(_) => ImageViewerView::on_enter(state),
             View::UserList(_) => UserListView::on_enter(state),
+            View::Post(_) => PostView::on_enter(state),
         }
     }
 
-    pub fn view(state: &AppState) -> iced::Element<Message> {
+    pub fn view(state: &AppState) -> iced::Element<'_, Message> {
         match &state.view {
             View::Home(v) => v.view(state),
             View::NovelList(v) => v.view(state),
@@ -74,6 +76,7 @@ impl View {
             View::Settings(v) => v.view(state),
             View::ImageViewer(v) => v.view(state),
             View::UserList(v) => v.view(state),
+            View::Post(v) => v.view(state),
         }
     }
 
@@ -87,6 +90,7 @@ impl View {
             ViewMessage::Settings(m) => SettingsView::update(m, state),
             ViewMessage::ImageViewer(m) => ImageViewerView::update(m, state),
             ViewMessage::UserList(m) => UserListView::update(m, state),
+            ViewMessage::Post(m) => PostView::update(m, state),
         }
     }
 }

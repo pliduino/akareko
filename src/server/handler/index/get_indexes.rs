@@ -23,7 +23,7 @@ impl AuroraProtocolCommand for GetIndexes {
             let handle = tokio::spawn(async move {
                 match s.as_str() {
                     NovelTag::TAG => {
-                        let novel_repo = repo.index();
+                        let novel_repo = repo.index().await;
                         match novel_repo.get_index(&hash).await {
                             Ok(index) => match index {
                                 Some(i) => Some(i.into()),

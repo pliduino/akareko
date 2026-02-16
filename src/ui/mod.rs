@@ -1,16 +1,17 @@
-use anawt::{AlertCategory, SettingsPack, TorrentClient};
+use anawt::{AlertCategory, SettingsPack, TorrentClient, options::AnawtOptions};
 use iced::{
     Length, Subscription, Task, alignment,
     widget::{Column, Container, button, column, stack, text},
     window,
 };
 use rclite::Arc;
+use std::path::PathBuf;
 use tokio::sync::{RwLock, mpsc};
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use crate::{
     config::AuroraConfig,
-    db::{Repositories, user::UserRepository},
+    db::Repositories,
     server::{AuroraServer, client::AuroraClient},
     ui::{
         components::{
@@ -22,6 +23,7 @@ use crate::{
 };
 
 mod components;
+mod icons;
 mod views;
 
 #[derive(Debug, Clone)]
@@ -124,7 +126,7 @@ impl AppState {
         self.repositories.is_some() && self.client.is_some() && self.torrent_client.is_some()
     }
 
-    pub fn view(&self, id: window::Id) -> iced::Element<Message> {
+    pub fn view(&self, id: window::Id) -> iced::Element<'_, Message> {
         if !self.has_initialized() {
             return column![text("Loading...")].into();
         }
@@ -182,7 +184,9 @@ impl AppState {
                     Task::perform(Repositories::initialize(self.server_config.clone()), |r| {
                         RepositoryLoaded(r)
                     }),
-                    Task::done(TorrentClientLoaded(TorrentClient::create(settings_pack))),
+                    Task::done(TorrentClientLoaded(TorrentClient::create(
+                        AnawtOptions::new().settings_pack(settings_pack),
+                    ))),
                 ]);
             }
             RepositoryLoaded(r) => {
@@ -212,12 +216,10 @@ impl AppState {
                 if let Some(torrent_client) = &self.torrent_client {
                     let client = torrent_client.clone();
 
-                    return Task::perform(
-                        async move {
-                            let info_hash = client.add_magnet(&magnet, &path).await;
-                        },
-                        |t| Message::Nothing,
-                    );
+                    return Task::future(async move {
+                        let info_hash = client.add_magnet(&magnet, &path).await;
+                        Message::Nothing
+                    });
                 }
             }
             ChangeView(v) => {
@@ -260,7 +262,7 @@ impl AppState {
                 if let Some(client) = &self.torrent_client {
                     let client = client.clone();
                     return Task::future(async move {
-                        client.save().await.unwrap();
+                        client.save(PathBuf::from("./data/torrents")).await.unwrap();
                         Message::Nothing
                     });
                 }
@@ -292,7 +294,7 @@ impl AppState {
                 let self_key = self.config.public_key().clone();
 
                 return Task::future(async move {
-                    let Ok(user) = repository.user().get_random_user().await else {
+                    let Ok(user) = repository.user().await.get_random_user().await else {
                         error!("Failed to get random user");
                         return Message::FinishExchange;
                     };
@@ -303,20 +305,13 @@ impl AppState {
                         return Message::FinishExchange;
                     }
 
-                    match user.address() {
-                        Some(address) => {
-                            info!("Exchanging with {}", address);
-                            match client.routine_exchange(address).await {
-                                Ok(()) => {}
-                                Err(e) => {
-                                    error!("Failed to exchange: {}", e);
-                                }
-                            }
+                    info!("Exchanging with {}", user.address());
+                    match client.routine_exchange(user.address()).await {
+                        Ok(()) => {}
+                        Err(e) => {
+                            error!("Failed to exchange: {}", e);
                         }
-                        None => {
-                            warn!("User has no registered address, dropping exchange");
-                        }
-                    };
+                    }
 
                     Message::FinishExchange
                 });

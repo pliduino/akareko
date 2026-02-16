@@ -1,12 +1,16 @@
 use iced::{
     Task,
-    widget::{button, checkbox, column, row, text},
+    widget::{button, checkbox, column, container, row, text, text_input, tooltip},
 };
 use tracing::info;
 
 use crate::{
     config::AuroraConfig,
-    db::Repositories,
+    db::{
+        Repositories,
+        user::{I2PAddress, TrustLevel, User},
+    },
+    helpers::now_timestamp,
     ui::{
         AppState, Message,
         components::toast::{Toast, ToastType},
@@ -17,6 +21,8 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct SettingsView {
     config: AuroraConfig,
+    old_name: String,
+    new_name: String,
     dirty: bool,
 }
 
@@ -26,6 +32,8 @@ pub enum SettingsMessage {
     UpdatedDevMode(bool),
     SaveConfig,
     SavedConfig(AuroraConfig),
+    UpdateName(String),
+    PublishName,
 }
 
 impl From<SettingsMessage> for Message {
@@ -38,6 +46,8 @@ impl SettingsView {
     pub fn new() -> Self {
         Self {
             config: AuroraConfig::default(),
+            old_name: String::new(),
+            new_name: String::new(),
             dirty: false,
         }
     }
@@ -49,7 +59,7 @@ impl SettingsView {
         Task::none()
     }
 
-    pub fn view(&self, state: &AppState) -> iced::Element<Message> {
+    pub fn view(&self, state: &AppState) -> iced::Element<'_, Message> {
         let pub_key = self.config.public_key().to_base64();
 
         let priv_key = self.config.private_key().to_base64();
@@ -64,15 +74,32 @@ impl SettingsView {
             row![text("Public Key: "), text(pub_key)],
             row![text("Private Key: "), text(priv_key)],
             row![
-                text("Relay: "),
-                checkbox("", self.config.is_relay())
-                    .on_toggle(|b| { SettingsMessage::UpdateRelay(b).into() }),
+                text_input(&self.old_name, &self.new_name)
+                    .on_input(|s| SettingsMessage::UpdateName(s).into()),
+                button("Publish").on_press(SettingsMessage::PublishName.into())
             ],
-            row![
-                text("Dev Mode: "),
-                checkbox("", self.config.dev_mode())
-                    .on_toggle(|b| { SettingsMessage::UpdatedDevMode(b).into() }),
-            ],
+            tooltip(
+                row![
+                    text("Relay: "),
+                    checkbox("", self.config.is_relay())
+                        .on_toggle(|b| { SettingsMessage::UpdateRelay(b).into() }),
+                ],
+                container("Enables other users to query your node for content")
+                    .padding(10)
+                    .style(container::rounded_box),
+                tooltip::Position::FollowCursor
+            ),
+            tooltip(
+                row![
+                    text("Dev Mode: "),
+                    checkbox("", self.config.dev_mode())
+                        .on_toggle(|b| { SettingsMessage::UpdatedDevMode(b).into() }),
+                ],
+                container("Enables adding content")
+                    .padding(10)
+                    .style(container::rounded_box),
+                tooltip::Position::FollowCursor
+            ),
             button(text("Save")).on_press_maybe(save_message),
         ]
         .into()
@@ -88,6 +115,45 @@ impl SettingsView {
                 SettingsMessage::UpdatedDevMode(dev_mode) => {
                     v.dirty = true;
                     v.config.set_dev_mode(dev_mode)
+                }
+                SettingsMessage::UpdateName(s) => {
+                    v.dirty = true;
+                    v.new_name = s;
+                }
+                SettingsMessage::PublishName => {
+                    if let Some(repositories) = state.repositories.as_ref() {
+                        let repositories = repositories.clone();
+                        v.old_name = std::mem::take(&mut v.new_name);
+
+                        let mut new_user = User::new_signed(
+                            v.old_name.clone(),
+                            now_timestamp(),
+                            state.config.private_key(),
+                            state.config.eepsite_address().clone(),
+                        );
+                        new_user.set_trust(TrustLevel::Ignore);
+
+                        return Task::future(async move {
+                            match repositories.user().await.upsert_user(new_user).await {
+                                Ok(_) => Message::PostToast(Toast {
+                                    title: "Username published".into(),
+                                    body: "Your username has been published to the network".into(),
+                                    ty: ToastType::Info,
+                                }),
+                                Err(e) => Message::PostToast(Toast {
+                                    title: "Error publishing username".into(),
+                                    body: format!("{}", e),
+                                    ty: ToastType::Error,
+                                }),
+                            }
+                        });
+                    }
+
+                    return Task::done(Message::PostToast(Toast {
+                        title: "Error publishing username".into(),
+                        body: "Database not initialized".into(),
+                        ty: ToastType::Error,
+                    }));
                 }
                 SettingsMessage::SaveConfig => {
                     let config_to_save = v.config.clone();

@@ -41,14 +41,14 @@ impl UserListView {
             let repositories = repositories.clone();
 
             return Task::future(async move {
-                let users = repositories.user().get_all_users().await;
+                let users = repositories.user().await.get_all_users().await;
                 UserListMessage::LoadedUsers(users).into()
             });
         }
         Task::none()
     }
 
-    pub fn view(&self, state: &AppState) -> iced::Element<Message> {
+    pub fn view(&self, _: &AppState) -> iced::Element<'_, Message> {
         let mut column: Vec<iced::Element<Message>> = vec![text("Users").into()];
 
         for user in self.users.iter() {
@@ -56,10 +56,7 @@ impl UserListView {
                 row![
                     text(user.name().clone() + " | "),
                     text(user.pub_key().to_base64() + " | "),
-                    text(match user.address() {
-                        Some(addr) => addr.to_string(),
-                        None => "None".to_string(),
-                    }),
+                    text(user.address().to_string()),
                 ]
                 .into(),
             );

@@ -1,7 +1,9 @@
 use std::{fmt::Debug, marker::PhantomData};
 
+use deadpool_sqlite::Pool;
 use futures::SinkExt;
 use rclite::Arc;
+
 use serde::{Deserialize, Deserializer, Serialize};
 use surrealdb::{
     RecordId, Surreal,
@@ -13,6 +15,8 @@ use tokio::{
 };
 use tracing::info;
 
+#[cfg(feature = "surrealdb")]
+use crate::db::comments::PostRepository;
 use crate::{
     config::AuroraConfig,
     db::{
@@ -24,10 +28,23 @@ use crate::{
     helpers::{Byteable, SanitizedString, now_timestamp},
 };
 
+pub mod comments;
 pub mod index;
 pub mod user;
 
 pub type Timestamp = u64;
+
+pub struct PaginateSearch<T> {
+    search: T,
+    take: usize,
+    skip: usize,
+}
+
+#[derive(Deserialize)]
+pub struct PaginateResponse<T> {
+    pub values: T,
+    pub total: usize,
+}
 
 pub trait ToBytes {
     fn to_bytes(&self) -> Vec<u8>;
@@ -58,10 +75,65 @@ impl Byteable for Magnet {
 
 #[derive(Debug, Clone)]
 pub struct Repositories {
+    #[cfg(feature = "surrealdb")]
     pub db: Surreal<Db>,
+    #[cfg(feature = "sqlite")]
+    pub db: Pool,
     config: Arc<RwLock<AuroraConfig>>,
 }
 
+#[cfg(feature = "sqlite")]
+impl Repositories {
+    pub async fn initialize(config: Arc<RwLock<AuroraConfig>>) -> Self {
+        use deadpool_sqlite::{Config, Runtime};
+
+        let cfg = Config::new("database/db.sqlite");
+        let db = cfg.create_pool(Runtime::Tokio1).unwrap();
+        let repositories = Repositories { db, config };
+        repositories
+    }
+
+    pub async fn get_random_contents(
+        &self,
+        count: u16,
+    ) -> Result<Vec<TaggedContent>, DatabaseError> {
+        // let mut tagged_contents = Vec::with_capacity(count as usize);
+
+        let conn = self.db.get().await.unwrap();
+        let result: i64 = conn
+            .interact(|conn| {
+                let mut stmt = conn.prepare("SELECT 1")?;
+                let mut rows = stmt.query([])?;
+                let row = rows.next()?.unwrap();
+                row.get(0)
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        todo!()
+        // let novels: Vec<Content<NovelTag>> = conn.
+
+        // .prepare("SELECT * FROM novels ORDER BY RANDOM() LIMIT ?1")
+        // .unwrap()
+        // .query_map([novel_tag], |row| Ok(TaggedContent::from(row.get(0)?)))
+        // .unwrap()
+        // .take(0)?;
+
+        // tagged_contents.extend(novels.into_iter().map(TaggedContent::from));
+
+        // Ok(tagged_contents)
+    }
+
+    pub async fn user(&self) -> UserRepository {
+        UserRepository::new(self.db.get().await.unwrap())
+    }
+
+    pub async fn index(&self) -> IndexRepository {
+        IndexRepository::new(self.db.get().await.unwrap())
+    }
+}
+
+#[cfg(feature = "surrealdb")]
 impl Repositories {
     pub async fn initialize(config: Arc<RwLock<AuroraConfig>>) -> Self {
         info!("Initializing SurrealDB");
@@ -73,16 +145,19 @@ impl Repositories {
         {
             let config = repositories.config.read().await;
 
-            let user_repository = repositories.user();
+            let user_repository = repositories.user().await;
             match user_repository.get_user(&config.public_key()).await {
                 Some(_) => {}
                 None => {
-                    let user = User::new_signed(
+                    use crate::db::user::TrustLevel;
+
+                    let mut user = User::new_signed(
                         "Anon".to_string(),
                         now_timestamp(),
                         &config.private_key(),
-                        Some(config.eepsite_address().clone()),
+                        config.eepsite_address().clone(),
                     );
+                    user.set_trust(TrustLevel::Ignore);
                     user_repository.upsert_user(user).await.unwrap();
                 }
             }
@@ -114,20 +189,17 @@ impl Repositories {
         Ok(tagged_contents)
     }
 
-    pub fn user(&self) -> UserRepository {
+    pub async fn user(&self) -> UserRepository {
         UserRepository::new(&self.db)
     }
 
-    pub fn index(&self) -> IndexRepository {
+    pub async fn index(&self) -> IndexRepository {
         IndexRepository::new(&self.db)
     }
-}
 
-#[derive(Debug, Clone, Serialize, Deserialize, byteable_derive::Byteable)]
-#[repr(u8)]
-pub enum ContentReadType {
-    SequenceFolder,
-    SingleFile,
+    pub async fn posts(&self) -> PostRepository {
+        PostRepository::new(&self.db)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -135,8 +207,11 @@ pub struct ContentEntry<T: IndexTag> {
     pub title: String,
     pub enumeration: f32,
     pub path: String,
-    pub ty: ContentReadType,
     pub content: T::Content,
+
+    // Metadata
+    #[serde(skip)]
+    pub progress: f32,
 }
 
 impl<T: IndexTag> ToBytes for ContentEntry<T> {
@@ -144,7 +219,6 @@ impl<T: IndexTag> ToBytes for ContentEntry<T> {
         let mut bytes: Vec<u8> = self.title.as_bytes().to_vec();
         bytes.extend(self.enumeration.to_be_bytes());
         bytes.extend(self.path.as_bytes());
-        bytes.push(self.ty.clone() as u8);
         bytes.extend(self.content.to_bytes());
         bytes
     }
@@ -158,7 +232,6 @@ impl<T: IndexTag> Byteable for ContentEntry<T> {
         self.title.encode(writer).await?;
         self.enumeration.encode(writer).await?;
         self.path.encode(writer).await?;
-        self.ty.encode(writer).await?;
         self.content.encode(writer).await?;
         Ok(())
     }
@@ -171,8 +244,8 @@ impl<T: IndexTag> Byteable for ContentEntry<T> {
             title: String::decode(reader).await?,
             enumeration: f32::decode(reader).await?,
             path: String::decode(reader).await?,
-            ty: ContentReadType::decode(reader).await?,
             content: T::Content::decode(reader).await?,
+            progress: 0.0,
         })
     }
 }
@@ -183,10 +256,13 @@ impl<T: IndexTag> Byteable for ContentEntry<T> {
     deserialize = "T::Content: Deserialize<'de>"
 ))]
 pub struct Content<T: IndexTag> {
-    #[serde(
-        rename = "id",
-        skip_serializing,
-        deserialize_with = "deserialize_signature_id"
+    #[cfg_attr(
+        feature = "surrealdb",
+        serde(
+            rename = "id",
+            skip_serializing,
+            deserialize_with = "deserialize_signature_id"
+        )
     )]
     signature: Signature,
     source: PublicKey,
@@ -198,13 +274,14 @@ pub struct Content<T: IndexTag> {
     entries: Vec<ContentEntry<T>>,
 }
 
+#[cfg(feature = "surrealdb")]
 fn deserialize_signature_id<'de, D>(deserializer: D) -> Result<Signature, D::Error>
 where
     D: Deserializer<'de>,
 {
     let id = RecordId::deserialize(deserializer)?;
     let key = id.key().to_string();
-    let trimmed = key.trim_start_matches("⟨").trim_end_matches("⟩");
+    let trimmed = key.trim_start_matches("`").trim_end_matches("`");
 
     Ok(Signature::from_base64(&trimmed).unwrap())
 }
@@ -264,12 +341,26 @@ impl<T: IndexTag> Content<T> {
         )
     }
 
+    pub fn verify(&self) -> bool {
+        let to_verify = Self::id_bytes(
+            &self.index_hash,
+            &self.timestamp,
+            &self.magnet_link,
+            &self.entries,
+        );
+        self.source.verify(&to_verify, &self.signature)
+    }
+
     pub fn signature(&self) -> &Signature {
         &self.signature
     }
 
     pub fn entries(&self) -> &Vec<ContentEntry<T>> {
         &self.entries
+    }
+
+    pub fn update_entry_progress(&mut self, index: usize, progress: f32) {
+        self.entries[index].progress = progress;
     }
 
     pub fn index_hash(&self) -> &Hash {
@@ -361,14 +452,19 @@ impl<T: IndexTag> Index<T> {
             Signature::empty(),
         );
 
-        index.sign_index(priv_key);
+        index.sign(priv_key);
 
         index
     }
 
-    fn sign_index(&mut self, priv_key: &PrivateKey) {
+    fn sign(&mut self, priv_key: &PrivateKey) {
         let to_sign = Self::id_bytes(&self.title, &self.release_date);
         self.signature = priv_key.sign(&to_sign);
+    }
+
+    pub fn verify(&self) -> bool {
+        let to_verify = Self::id_bytes(&self.title, &self.release_date);
+        self.source.verify(&to_verify, &self.signature)
     }
 
     pub fn hash(&self) -> &Hash {
@@ -419,6 +515,14 @@ impl<T: IndexTag> Byteable for Index<T> {
 
 pub enum TaggedIndex {
     Novel(Index<NovelTag>),
+}
+
+impl TaggedIndex {
+    pub fn verify(&self) -> bool {
+        match self {
+            TaggedIndex::Novel(index) => index.verify(),
+        }
+    }
 }
 
 impl Byteable for TaggedIndex {

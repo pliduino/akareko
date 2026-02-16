@@ -13,7 +13,7 @@ use crate::errors::Base64Error;
 #[serde(transparent)]
 pub struct PrivateKey([u8; 32]);
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, byteable_derive::Byteable)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, byteable_derive::Byteable)]
 #[serde(transparent)]
 pub struct PublicKey([u8; 32]);
 
@@ -88,7 +88,7 @@ impl PrivateKey {
         PublicKey(signing_key.verifying_key().to_bytes())
     }
 
-    pub fn as_bytes(&self) -> &[u8] {
+    pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
 
@@ -119,7 +119,7 @@ impl PublicKey {
         verifying_key.verify_strict(msg, &signature).is_ok()
     }
 
-    pub fn as_bytes(&self) -> &[u8] {
+    pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
 
