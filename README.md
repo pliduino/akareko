@@ -1,3 +1,3 @@
-# Aurora I2P
+# Akareko
 
 WIP: P2P content sharing platform anonymized through I2P
