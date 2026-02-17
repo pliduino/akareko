@@ -1,7 +1,7 @@
 use std::{collections::HashSet, num::NonZero};
 
 use iced::{
-    Task,
+    Subscription, Task,
     widget::{
         Column, Row, button, row, text,
         text_editor::{self, Content},
@@ -77,6 +77,10 @@ impl PostView {
             users: HashSet::new(),
             content: Content::new(),
         }
+    }
+
+    pub fn subscription(&self) -> iced::Subscription<Message> {
+        Subscription::none()
     }
 
     pub fn on_enter(_state: &mut AppState) -> Task<Message> {

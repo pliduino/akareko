@@ -335,11 +335,13 @@ impl AppState {
 
     pub fn subscription(&self) -> iced::Subscription<Message> {
         let toast_subscription = Subscription::run(toast_worker);
+        let view_subscription = self.view.subscription();
 
         Subscription::batch([
             iced::time::every(std::time::Duration::from_millis(500)).map(|_| Message::Nothing),
-            iced::time::every(std::time::Duration::from_millis(5000)).map(|_| Message::Exchange),
+            //iced::time::every(std::time::Duration::from_millis(5000)).map(|_| Message::Exchange),
             toast_subscription,
+            view_subscription,
         ])
     }
 }

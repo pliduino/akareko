@@ -1,6 +1,6 @@
 use anawt::{AnawtTorrentStatus, InfoHash, TorrentState};
 use iced::{
-    Length, Task,
+    Length, Subscription, Task,
     widget::{Column, button, image, row, svg, text},
 };
 use tokio::sync::watch;
@@ -66,6 +66,10 @@ impl NovelView {
         Task::none()
     }
 
+    pub fn subscription(&self) -> iced::Subscription<Message> {
+        Subscription::none()
+    }
+
     pub fn view(&self, state: &AppState) -> iced::Element<Message> {
         let mut column: Vec<iced::Element<Message>> = vec![text(self.novel.title().clone()).into()];
 
@@ -80,41 +84,43 @@ impl NovelView {
         for i in 0..self.chapters.len() {
             let chapter = &self.chapters[i];
             let rx = self.torrents[i].as_ref();
-            enum ClickMessageType {
-                Nothing,
+            enum ContentState {
+                Downloading(f64),
                 Download,
-                Read,
+                Ready,
             }
-            let select_message: ClickMessageType = match rx {
+            let select_message: ContentState = match rx {
                 Some(rx) => {
                     let status = rx.borrow();
 
                     match status.state {
-                        TorrentState::Finished | TorrentState::Seeding => ClickMessageType::Read,
-                        _ => ClickMessageType::Nothing,
+                        TorrentState::Finished | TorrentState::Seeding => ContentState::Ready,
+                        _ => ContentState::Downloading(status.progress),
                     }
                 }
-                None => ClickMessageType::Download,
+                None => ContentState::Download,
             };
 
             //         text(format!("Downloading: {:.1}", status.progress * 100.0))
             for (j, e) in chapter.entries().iter().enumerate() {
                 column.push(
                     row![
-                        button(text(e.title.clone())).on_press(match select_message {
-                            ClickMessageType::Nothing => Message::Nothing,
-                            ClickMessageType::Download => NovelMessage::DownloadTorrentAndReload {
-                                magnet: chapter.magnet_link.clone().0,
-                                path: format!(
-                                    "./data/{}/{}/{}",
-                                    NovelTag::TAG,
-                                    SanitizedString::new(self.novel.title()).as_str(),
-                                    chapter.signature().as_base64_url()
-                                ),
-                            }
-                            .into(),
-                            ClickMessageType::Read =>
-                                Message::ChangeView(View::ImageViewer(ImageViewerView::new(
+                        button(text(e.title.clone())).on_press_maybe(match select_message {
+                            ContentState::Downloading(_) => None,
+                            ContentState::Download => Some(
+                                NovelMessage::DownloadTorrentAndReload {
+                                    magnet: chapter.magnet_link.clone().0,
+                                    path: format!(
+                                        "./data/{}/{}/{}",
+                                        NovelTag::TAG,
+                                        SanitizedString::new(self.novel.title()).as_str(),
+                                        chapter.signature().as_base64_url()
+                                    ),
+                                }
+                                .into()
+                            ),
+                            ContentState::Ready => Some(Message::ChangeView(View::ImageViewer(
+                                ImageViewerView::new(
                                     format!(
                                         "./data/{}/{}/{}/{}",
                                         NovelTag::TAG,
@@ -123,8 +129,16 @@ impl NovelView {
                                         chapter.entries()[j].path
                                     )
                                     .into(),
-                                ))),
+                                )
+                            ))),
                         }),
+                        match select_message {
+                            ContentState::Downloading(p) => {
+                                text(format!("Downloading: {:.1}", p * 100.0))
+                            }
+                            ContentState::Download => text("---"),
+                            ContentState::Ready => text("R"),
+                        },
                         if e.progress < 1.0 {
                             button(
                                 svg(svg::Handle::from_memory(UNSEEN_ICON))

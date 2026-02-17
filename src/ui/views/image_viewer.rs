@@ -2,13 +2,17 @@ use std::{fs::File, io::Read, path::PathBuf};
 
 use bytes::Bytes;
 use iced::{
-    Length, Task,
+    Length, Subscription, Task,
+    advanced::{Widget, widget::operation},
+    keyboard::{self, Key, key::Named},
     widget::{
         self, Column, Scrollable, Space, button,
         canvas::Image,
         center, column, container,
         image::{self, Handle, viewer},
-        mouse_area, row, stack, text, text_input,
+        mouse_area, row,
+        scrollable::{self, Id, snap_to},
+        stack, text, text_input,
     },
 };
 use zip::ZipArchive;
@@ -21,6 +25,8 @@ use crate::{
     },
 };
 
+const SCROLLABLE: &str = "image_scrollable";
+
 #[derive(Debug, Clone)]
 pub struct ImageViewerView {
     file_path: PathBuf,
@@ -28,6 +34,8 @@ pub struct ImageViewerView {
 
     // Starts at 1 and go up to len, use -1 to get index
     cur_page: usize,
+
+    scroll_offset: scrollable::RelativeOffset,
 }
 
 #[derive(Debug, Clone)]
@@ -49,7 +57,16 @@ impl ImageViewerView {
             file_path,
             images: vec![],
             cur_page: 1,
+            scroll_offset: scrollable::RelativeOffset::START,
         }
+    }
+
+    pub fn subscription(&self) -> iced::Subscription<Message> {
+        keyboard::on_key_press(|key, modifiers| match key {
+            Key::Named(Named::ArrowRight) => Some(ImageViewerMessage::NextPage.into()),
+            Key::Named(Named::ArrowLeft) => Some(ImageViewerMessage::PrevPage.into()),
+            _ => None,
+        })
     }
 
     pub fn on_enter(state: &mut AppState) -> Task<Message> {
@@ -80,18 +97,6 @@ impl ImageViewerView {
     }
 
     pub fn view(&self, state: &AppState) -> iced::Element<'_, Message> {
-        let image_area = if self.images.len() > 0 {
-            Scrollable::new(
-                center(viewer(self.images[self.cur_page - 1].handle.clone()))
-                    .center_y(iced::Length::Shrink),
-            )
-            .width(iced::Length::Fill)
-            .height(iced::Length::Fill)
-        } else {
-            Scrollable::new(text("Loading..."))
-                .width(iced::Length::Fill)
-                .height(iced::Length::Fill)
-        };
         let clickable_area = container(row![
             mouse_area(Space::new(Length::FillPortion(2), Length::Fill))
                 .on_press(ImageViewerMessage::PrevPage.into()),
@@ -99,6 +104,21 @@ impl ImageViewerView {
             mouse_area(Space::new(Length::FillPortion(2), Length::Fill))
                 .on_press(ImageViewerMessage::NextPage.into())
         ]);
+
+        let image_area = if self.images.len() > 0 {
+            Scrollable::new(stack![
+                center(viewer(self.images[self.cur_page - 1].handle.clone()))
+                    .center_y(iced::Length::Shrink),
+                clickable_area
+            ])
+            .width(iced::Length::Fill)
+            .height(iced::Length::Fill)
+            .id(scrollable::Id::new(SCROLLABLE))
+        } else {
+            Scrollable::new(text("Loading..."))
+                .width(iced::Length::Fill)
+                .height(iced::Length::Fill)
+        };
 
         column![
             row![
@@ -114,7 +134,7 @@ impl ImageViewerView {
                     Some(ImageViewerMessage::NextPage.into())
                 }),
             ],
-            stack![image_area, clickable_area]
+            image_area
         ]
         .align_x(iced::alignment::Horizontal::Center)
         .width(iced::Length::Fill)
@@ -133,11 +153,13 @@ impl ImageViewerView {
                 ImageViewerMessage::PrevPage => {
                     if v.cur_page > 1 {
                         v.cur_page -= 1;
+                        return snap_to(Id::new(SCROLLABLE), scrollable::RelativeOffset::START);
                     }
                 }
                 ImageViewerMessage::NextPage => {
                     if v.cur_page < v.images.len() {
                         v.cur_page += 1;
+                        return snap_to(Id::new(SCROLLABLE), scrollable::RelativeOffset::START);
                     }
                 }
             }

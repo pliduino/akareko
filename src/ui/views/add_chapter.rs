@@ -1,5 +1,5 @@
 use iced::{
-    Task,
+    Subscription, Task,
     widget::{Column, button, center, column, row, text, text_input},
 };
 
@@ -56,6 +56,10 @@ impl AddNovelChapterView {
             magnet: String::new(),
             entries: vec![],
         }
+    }
+
+    pub fn subscription(&self) -> iced::Subscription<Message> {
+        Subscription::none()
     }
 
     pub fn on_enter(state: &mut AppState) -> Task<Message> {

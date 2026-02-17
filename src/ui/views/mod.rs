@@ -93,4 +93,18 @@ impl View {
             ViewMessage::Post(m) => PostView::update(m, state),
         }
     }
+
+    pub fn subscription(&self) -> iced::Subscription<Message> {
+        match self {
+            View::Home(v) => v.subscription(),
+            View::NovelList(v) => v.subscription(),
+            View::Novel(v) => v.subscription(),
+            View::AddNovel(v) => v.subscription(),
+            View::AddChapter(v) => v.subscription(),
+            View::Settings(v) => v.subscription(),
+            View::ImageViewer(v) => v.subscription(),
+            View::UserList(v) => v.subscription(),
+            View::Post(v) => v.subscription(),
+        }
+    }
 }

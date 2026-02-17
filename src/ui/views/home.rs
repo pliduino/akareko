@@ -1,5 +1,5 @@
 use iced::{
-    Task,
+    Subscription, Task,
     widget::{button, column, text},
 };
 
@@ -21,6 +21,10 @@ pub enum HomeMessage {}
 impl HomeView {
     pub fn new() -> Self {
         Self {}
+    }
+
+    pub fn subscription(&self) -> iced::Subscription<Message> {
+        Subscription::none()
     }
 
     pub fn on_enter(state: &mut AppState) -> Task<Message> {

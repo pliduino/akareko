@@ -1,5 +1,5 @@
 use iced::{
-    Task,
+    Subscription, Task,
     widget::{Button, Column, button, column, row, text},
 };
 
@@ -74,5 +74,9 @@ impl UserListView {
             }
         }
         Task::none()
+    }
+
+    pub fn subscription(&self) -> iced::Subscription<Message> {
+        Subscription::none()
     }
 }

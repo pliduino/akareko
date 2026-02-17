@@ -1,5 +1,5 @@
 use iced::{
-    Task,
+    Subscription, Task,
     widget::{button, checkbox, column, container, row, text, text_input, tooltip},
 };
 use tracing::info;
@@ -52,10 +52,15 @@ impl SettingsView {
         }
     }
 
+    pub fn subscription(&self) -> iced::Subscription<Message> {
+        Subscription::none()
+    }
+
     pub fn on_enter(state: &mut AppState) -> Task<Message> {
         if let View::Settings(v) = &mut state.view {
             v.config = state.config.clone();
         }
+        // TODO: Load from DB old_name
         Task::none()
     }
 

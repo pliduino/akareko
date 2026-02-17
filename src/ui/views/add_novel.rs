@@ -1,5 +1,5 @@
 use iced::{
-    Task,
+    Subscription, Task,
     widget::{button, column, text, text_input},
 };
 
@@ -37,6 +37,10 @@ impl AddNovelView {
         Self {
             title: String::new(),
         }
+    }
+
+    pub fn subscription(&self) -> iced::Subscription<Message> {
+        Subscription::none()
     }
 
     pub fn on_enter(state: &mut AppState) -> Task<Message> {

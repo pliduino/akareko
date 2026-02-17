@@ -1,5 +1,5 @@
 use iced::{
-    Task,
+    Subscription, Task,
     widget::{Button, Column, button, column, row, text},
 };
 
@@ -33,6 +33,10 @@ impl From<NovelListMessage> for Message {
 impl NovelListView {
     pub fn new() -> Self {
         Self { novels: vec![] }
+    }
+
+    pub fn subscription(&self) -> iced::Subscription<Message> {
+        Subscription::none()
     }
 
     pub fn on_enter(state: &mut AppState) -> Task<Message> {
