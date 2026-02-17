@@ -55,6 +55,7 @@ pub enum PostMessage {
         total_posts: usize,
     },
     AddPost,
+    Posted(Post),
     EditComment(text_editor::Action),
 }
 
@@ -139,7 +140,7 @@ impl PostView {
                         );
                         return Task::future(async move {
                             match repositories.posts().await.add_comment(post).await {
-                                Ok(_) => Message::Nothing,
+                                Ok(p) => PostMessage::Posted(p).into(),
                                 Err(e) => Message::PostToast(Toast {
                                     title: "Failed to add post".to_string(),
                                     body: e.to_string(),
@@ -147,6 +148,12 @@ impl PostView {
                                 }),
                             }
                         });
+                    }
+                }
+                PostMessage::Posted(p) => {
+                    if v.cur_page == v.total_pages {
+                        v.posts.push(p);
+                        v.content = Content::new();
                     }
                 }
                 PostMessage::LoadPage(page) => {
