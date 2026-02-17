@@ -6,10 +6,8 @@ use iced::{
     advanced::{Widget, widget::operation},
     keyboard::{self, Key, key::Named},
     widget::{
-        self, Column, Scrollable, Space, button,
-        canvas::Image,
-        center, column, container,
-        image::{self, Handle, viewer},
+        self, Column, Image, Scrollable, Space, button, center, column, container,
+        image::Handle,
         mouse_area, row,
         scrollable::{self, Id, snap_to},
         stack, text, text_input,
@@ -30,7 +28,7 @@ const SCROLLABLE: &str = "image_scrollable";
 #[derive(Debug, Clone)]
 pub struct ImageViewerView {
     file_path: PathBuf,
-    images: Vec<Image>,
+    images: Vec<Handle>,
 
     // Starts at 1 and go up to len, use -1 to get index
     cur_page: usize,
@@ -40,7 +38,7 @@ pub struct ImageViewerView {
 
 #[derive(Debug, Clone)]
 pub enum ImageViewerMessage {
-    LoadedImages(Vec<Image>),
+    LoadedImages(Vec<Handle>),
     PrevPage,
     NextPage,
 }
@@ -83,7 +81,7 @@ impl ImageViewerView {
                             let mut buffer = vec![];
                             f.read_to_end(&mut buffer).unwrap();
                             let bytes = Bytes::from(buffer);
-                            images.push(Image::new(Handle::from_bytes(bytes)));
+                            images.push(Handle::from_bytes(bytes));
                         }
                         return ImageViewerMessage::LoadedImages(images).into();
                     }
@@ -107,7 +105,7 @@ impl ImageViewerView {
 
         let image_area = if self.images.len() > 0 {
             Scrollable::new(stack![
-                center(viewer(self.images[self.cur_page - 1].handle.clone()))
+                center(widget::image(self.images[self.cur_page - 1].clone()))
                     .center_y(iced::Length::Shrink),
                 clickable_area
             ])

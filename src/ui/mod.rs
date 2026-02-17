@@ -16,7 +16,7 @@ use crate::{
     ui::{
         components::{
             modal::{Modal, ModalMessage, modal},
-            toast::{Toast, toast_worker},
+            toast::{Toast, ToastType, toast_worker},
         },
         views::{View, ViewMessage, home::HomeView},
     },
@@ -175,18 +175,33 @@ impl AppState {
                 let mut config = self.server_config.blocking_write();
                 *config = c;
 
-                let mut settings_pack = SettingsPack::new();
-                settings_pack.set_alert_mask(
-                    AlertCategory::Error | AlertCategory::Storage | AlertCategory::Status,
-                );
-
                 return Task::batch([
                     Task::perform(Repositories::initialize(self.server_config.clone()), |r| {
                         RepositoryLoaded(r)
                     }),
-                    Task::done(TorrentClientLoaded(TorrentClient::create(
-                        AnawtOptions::new().settings_pack(settings_pack),
-                    ))),
+                    Task::future(async move {
+                        let mut settings_pack = SettingsPack::new();
+                        settings_pack.set_alert_mask(
+                            AlertCategory::Error | AlertCategory::Storage | AlertCategory::Status,
+                        );
+
+                        let client =
+                            TorrentClient::create(AnawtOptions::new().settings_pack(settings_pack));
+
+                        match client.load("./data/torrents".into()).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("Failed to load torrents: {}", e);
+                                return PostToast(Toast {
+                                    title: "Failed to load torrents".to_string(),
+                                    body: e.to_string(),
+                                    ty: ToastType::Error,
+                                });
+                            }
+                        }
+
+                        TorrentClientLoaded(client)
+                    }),
                 ]);
             }
             RepositoryLoaded(r) => {
