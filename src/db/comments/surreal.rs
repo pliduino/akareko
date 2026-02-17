@@ -85,16 +85,6 @@ impl<'a> PostRepository<'a> {
             data: Vec<Post>,
             users: HashSet<User>,
         }
-        let result: surrealdb::Value = self
-            .db
-            .query(QUERY)
-            .bind(("topic", topic.clone()))
-            .bind(("take", take))
-            .bind(("skip", skip))
-            .await?
-            .take(3)?;
-
-        dbg!(result);
 
         let result: Option<Response> = self
             .db
