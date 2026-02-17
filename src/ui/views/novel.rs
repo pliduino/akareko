@@ -1,6 +1,6 @@
 use anawt::{AnawtTorrentStatus, InfoHash, TorrentState};
 use iced::{
-    Length, Subscription, Task,
+    Color, Length, Subscription, Task,
     widget::{Column, button, image, row, svg, text},
 };
 use tokio::sync::watch;
@@ -13,6 +13,7 @@ use crate::{
     ui::{
         AppState, Message,
         icons::{CHAT_ICON, SEEN_ICON, UNSEEN_ICON},
+        style,
         views::{
             View, ViewMessage, add_chapter::AddNovelChapterView, image_viewer::ImageViewerView,
             post::PostView,
@@ -142,26 +143,38 @@ impl NovelView {
                         if e.progress < 1.0 {
                             button(
                                 svg(svg::Handle::from_memory(UNSEEN_ICON))
-                                    .height(Length::Fixed(32.0))
-                                    .width(Length::Fixed(32.0)),
+                                    .height(Length::Fixed(24.0))
+                                    .width(Length::Fixed(24.0))
+                                    .style(|t, _| svg::Style {
+                                        color: Some(Color::WHITE),
+                                    }),
                             )
+                            .style(style::icon_button)
                             .on_press(NovelMessage::UpdateProgress(j, i, 1.0).into())
                         } else {
                             button(
                                 svg(svg::Handle::from_memory(SEEN_ICON))
-                                    .height(Length::Fixed(32.0))
-                                    .width(Length::Fixed(32.0)),
+                                    .height(Length::Fixed(24.0))
+                                    .width(Length::Fixed(24.0))
+                                    .style(|t, _| svg::Style {
+                                        color: Some(Color::WHITE),
+                                    }),
                             )
+                            .style(style::icon_button)
                             .on_press(NovelMessage::UpdateProgress(j, i, 0.0).into())
                         },
                         button(
                             svg(svg::Handle::from_memory(CHAT_ICON))
-                                .height(Length::Fixed(32.0))
-                                .width(Length::Fixed(32.0))
+                                .height(Length::Fixed(24.0))
+                                .width(Length::Fixed(24.0))
+                                .style(|t, _| svg::Style {
+                                    color: Some(Color::WHITE),
+                                }),
                         )
-                        .on_press(Message::ChangeView(View::Post(
-                            PostView::new(Topic::from_entry(&self.novel, e.enumeration))
-                        )))
+                        .style(style::icon_button)
+                        .on_press(Message::ChangeView(View::Post(PostView::new(
+                            Topic::from_entry(&self.novel, e.enumeration)
+                        ))))
                     ]
                     .into(),
                 );

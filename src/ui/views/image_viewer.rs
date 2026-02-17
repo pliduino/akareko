@@ -9,7 +9,7 @@ use iced::{
         self, Column, Image, Scrollable, Space, button, center, column, container,
         image::Handle,
         mouse_area, row,
-        scrollable::{self, Id, snap_to},
+        scrollable::{self, Id, scroll_by, snap_to},
         stack, text, text_input,
     },
 };
@@ -32,13 +32,12 @@ pub struct ImageViewerView {
 
     // Starts at 1 and go up to len, use -1 to get index
     cur_page: usize,
-
-    scroll_offset: scrollable::RelativeOffset,
 }
 
 #[derive(Debug, Clone)]
 pub enum ImageViewerMessage {
     LoadedImages(Vec<Handle>),
+    ScrollBy(scrollable::AbsoluteOffset),
     PrevPage,
     NextPage,
 }
@@ -50,19 +49,34 @@ impl From<ImageViewerMessage> for Message {
 }
 
 impl ImageViewerView {
+    const SCROLL_OFFSET: f32 = 64.0;
+
     pub fn new(file_path: PathBuf) -> Self {
         Self {
             file_path,
             images: vec![],
             cur_page: 1,
-            scroll_offset: scrollable::RelativeOffset::START,
         }
     }
 
     pub fn subscription(&self) -> iced::Subscription<Message> {
-        keyboard::on_key_press(|key, modifiers| match key {
+        keyboard::on_key_press(|key, _| match key {
             Key::Named(Named::ArrowRight) => Some(ImageViewerMessage::NextPage.into()),
             Key::Named(Named::ArrowLeft) => Some(ImageViewerMessage::PrevPage.into()),
+            Key::Named(Named::ArrowUp) => Some(
+                ImageViewerMessage::ScrollBy(scrollable::AbsoluteOffset {
+                    x: 0.0,
+                    y: -Self::SCROLL_OFFSET,
+                })
+                .into(),
+            ),
+            Key::Named(Named::ArrowDown) => Some(
+                ImageViewerMessage::ScrollBy(scrollable::AbsoluteOffset {
+                    x: 0.0,
+                    y: Self::SCROLL_OFFSET,
+                })
+                .into(),
+            ),
             _ => None,
         })
     }
@@ -159,6 +173,9 @@ impl ImageViewerView {
                         v.cur_page += 1;
                         return snap_to(Id::new(SCROLLABLE), scrollable::RelativeOffset::START);
                     }
+                }
+                ImageViewerMessage::ScrollBy(offset) => {
+                    return scroll_by(Id::new(SCROLLABLE), offset);
                 }
             }
         }

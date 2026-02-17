@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use iced::Task;
+use iced::Theme;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
@@ -22,6 +23,8 @@ mod helpers;
 mod models;
 mod server;
 mod ui;
+
+#[cfg(feature = "sqlite")]
 mod embedded {
     use refinery::embed_migrations;
     embed_migrations!("./migrations/sqlite");
@@ -46,6 +49,7 @@ fn main() -> Result<(), ()> {
 
     iced::daemon("Aurora", AppState::update, AppState::view)
         .subscription(AppState::subscription)
+        .theme(|s, _| s.theme())
         .run_with(|| {
             (
                 AppState::new(),

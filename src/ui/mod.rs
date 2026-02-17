@@ -1,6 +1,6 @@
 use anawt::{AlertCategory, SettingsPack, TorrentClient, options::AnawtOptions};
 use iced::{
-    Length, Subscription, Task, alignment,
+    Length, Subscription, Task, Theme, alignment,
     widget::{Column, Container, button, column, stack, text},
     window,
 };
@@ -24,6 +24,7 @@ use crate::{
 
 mod components;
 mod icons;
+mod style;
 mod views;
 
 #[derive(Debug, Clone)]
@@ -102,6 +103,8 @@ pub struct AppState {
 
     exchanging: bool,
 
+    theme: Theme,
+
     modal: Option<Modal>,
 }
 
@@ -118,12 +121,17 @@ impl AppState {
             toast_tx: None,
             toasts: Vec::new(),
             exchanging: false,
+            theme: Theme::CatppuccinMocha,
             modal: None,
         }
     }
 
     fn has_initialized(&self) -> bool {
         self.repositories.is_some() && self.client.is_some() && self.torrent_client.is_some()
+    }
+
+    pub fn theme(&self) -> Theme {
+        self.theme.clone()
     }
 
     pub fn view(&self, id: window::Id) -> iced::Element<'_, Message> {
