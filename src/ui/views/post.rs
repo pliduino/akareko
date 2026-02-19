@@ -121,7 +121,6 @@ impl PostView {
                     users,
                     total_posts,
                 } => {
-                    dbg!(&users);
                     v.posts = posts;
                     v.users = users;
                     v.total_pages = total_posts

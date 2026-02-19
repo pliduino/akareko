@@ -3,40 +3,16 @@ mod keys;
 use std::fmt::Display;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sha2::Digest;
 
 pub use keys::{PrivateKey, PublicKey, Signable, Signature};
+use serde::de::Error as DeError;
 
 use crate::errors::Base64Error;
 
-#[derive(Debug, Clone, PartialEq, Eq, byteable_derive::Byteable)]
-pub struct Hash([u8; 64]);
-
-impl Serialize for Hash {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_bytes(&self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for Hash {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let bytes = Vec::deserialize(deserializer)?;
-        match bytes.try_into() {
-            Ok(hash) => Ok(Hash(hash)),
-            Err(b) => Err(serde::de::Error::custom(format!(
-                "Invalid length, expected 64 bytes, got {}",
-                b.len()
-            ))),
-        }
-    }
-}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, byteable_derive::Byteable)]
+pub struct Hash(#[serde(with = "serde_bytes")] [u8; 64]);
 
 impl std::hash::Hash for Hash {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

@@ -196,6 +196,7 @@ impl AppState {
                         let client =
                             TorrentClient::create(AnawtOptions::new().settings_pack(settings_pack));
 
+                        // TODO: this should not kill the client
                         match client.load("./data/torrents".into()).await {
                             Ok(_) => {}
                             Err(e) => {

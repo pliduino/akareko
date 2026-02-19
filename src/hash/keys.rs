@@ -12,14 +12,14 @@ use crate::errors::Base64Error;
 
 #[derive(Serialize, Deserialize, Debug, Clone, ZeroizeOnDrop)]
 #[serde(transparent)]
-pub struct PrivateKey([u8; 32]);
+pub struct PrivateKey(#[serde(with = "serde_bytes")] [u8; 32]);
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, byteable_derive::Byteable)]
 #[serde(transparent)]
-pub struct PublicKey([u8; 32]);
+pub struct PublicKey(#[serde(with = "serde_bytes")] [u8; 32]);
 
-#[derive(Debug, Clone, byteable_derive::Byteable)]
-pub struct Signature([u8; 64]);
+#[derive(Debug, Clone, Serialize, Deserialize, byteable_derive::Byteable)]
+pub struct Signature(#[serde(with = "serde_bytes")] [u8; 64]);
 
 impl Signature {
     pub fn empty() -> Self {
@@ -48,32 +48,6 @@ impl Signature {
                 actual: b.len(),
             }),
         }
-    }
-}
-
-impl Serialize for Signature {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        // Convert to Vec<u8> for serialization
-        serializer.collect_seq(self.0.iter())
-    }
-}
-
-impl<'de> Deserialize<'de> for Signature {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // Deserialize into Vec<u8> first
-        let vec = Vec::<u8>::deserialize(deserializer)?;
-        if vec.len() != 64 {
-            return Err(D::Error::custom("expected 64 bytes"));
-        }
-        let mut arr = [0u8; 64];
-        arr.copy_from_slice(&vec);
-        Ok(Signature(arr))
     }
 }
 

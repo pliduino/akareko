@@ -1,4 +1,5 @@
-use serde::{Deserialize, Serialize};
+use serde::de::Error as DeError;
+use serde::{Deserialize, Deserializer, Serialize};
 use surrealdb::RecordId;
 
 use crate::{
@@ -14,33 +15,8 @@ mod surreal;
 #[cfg(feature = "surrealdb")]
 pub use surreal::PostRepository;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Topic([u8; 64]);
-
-impl Serialize for Topic {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_bytes(&self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for Topic {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let bytes = Vec::deserialize(deserializer)?;
-        match bytes.try_into() {
-            Ok(hash) => Ok(Self(hash)),
-            Err(b) => Err(serde::de::Error::custom(format!(
-                "Invalid length, expected 64 bytes, got {}",
-                b.len()
-            ))),
-        }
-    }
-}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Topic(#[serde(with = "serde_bytes")] [u8; 64]);
 
 impl Topic {
     pub fn from_index<I: IndexTag>(index: &Index<I>) -> Self {
