@@ -19,7 +19,7 @@ use iced::{
 };
 use tokio::{
     fs::{File, read_dir},
-    io::{AsyncReadExt, BufReader},
+    io::BufReader,
 };
 use tracing::error;
 
