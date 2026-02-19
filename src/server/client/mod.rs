@@ -15,7 +15,7 @@ use crate::{
     config::AuroraConfig,
     db::{
         Content, Index, IndexTag, Repositories, TaggedIndex,
-        index::{NovelTag, TaggedContent},
+        index::{MangaTag, TaggedContent},
         user::{I2PAddress, TrustLevel, User, UserRepository},
     },
     errors::ClientError,
@@ -111,7 +111,7 @@ impl AuroraClient {
             }
             match index {
                 TaggedIndex::Novel(index) => {
-                    if T::TAG == NovelTag::TAG {
+                    if T::TAG == MangaTag::TAG {
                         indexes.push(index.transmute());
                     }
                 }
@@ -145,12 +145,12 @@ impl AuroraClient {
 
         for content in contents.iter() {
             match content {
-                TaggedContent::Novel(content) => {
+                TaggedContent::Manga(content) => {
                     match self
                         .repositories
                         .index()
                         .await
-                        .get_index::<NovelTag>(content.index_hash())
+                        .get_index::<MangaTag>(content.index_hash())
                         .await
                     {
                         Ok(i) => match i {
@@ -159,7 +159,7 @@ impl AuroraClient {
                             }
                             None => {
                                 missing_indexes.push((
-                                    NovelTag::TAG.to_string(),
+                                    MangaTag::TAG.to_string(),
                                     content.index_hash().clone(),
                                 ));
                             }
@@ -210,7 +210,7 @@ impl AuroraClient {
                 continue;
             }
             match content {
-                TaggedContent::Novel(content) => {
+                TaggedContent::Manga(content) => {
                     match self.repositories.index().await.add_content(content).await {
                         Ok(_) => {}
                         Err(e) => {

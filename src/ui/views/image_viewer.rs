@@ -1,24 +1,33 @@
-use std::{fs::File, io::Read, path::PathBuf};
+use std::{io::Read, path::PathBuf};
 
-use bytes::Bytes;
+use async_zip::base::read::seek::ZipFileReader;
+use futures::{AsyncReadExt, SinkExt};
 use iced::{
-    Length, Subscription, Task,
-    advanced::{Widget, widget::operation},
+    Element, Event, Length, Subscription, Task, event,
     keyboard::{self, Key, key::Named},
+    stream,
+    task::sipper,
     widget::{
         self, Column, Image, Scrollable, Space, button, center, column, container,
         image::Handle,
-        mouse_area, row,
-        scrollable::{self, Id, scroll_by, snap_to},
+        mouse_area,
+        operation::{scroll_by, snap_to},
+        row,
+        scrollable::{self},
         stack, text, text_input,
     },
 };
-use zip::ZipArchive;
+use tokio::{
+    fs::{File, read_dir},
+    io::{AsyncReadExt, BufReader},
+};
+use tracing::error;
 
 use crate::{
     db::{Index, Repositories, index::IndexRepository},
     ui::{
         AppState, Message,
+        components::toast::Toast,
         views::{View, ViewMessage, novel_list::NovelListView},
     },
 };
@@ -28,7 +37,7 @@ const SCROLLABLE: &str = "image_scrollable";
 #[derive(Debug, Clone)]
 pub struct ImageViewerView {
     file_path: PathBuf,
-    images: Vec<Handle>,
+    images: Vec<Option<(Handle, u32)>>, // Height
 
     // Starts at 1 and go up to len, use -1 to get index
     cur_page: usize,
@@ -36,7 +45,14 @@ pub struct ImageViewerView {
 
 #[derive(Debug, Clone)]
 pub enum ImageViewerMessage {
-    LoadedImages(Vec<Handle>),
+    PreloadImages {
+        total_images: usize,
+    },
+    LoadedImage {
+        handle: Handle,
+        height: u32,
+        index: usize,
+    },
     ScrollBy(scrollable::AbsoluteOffset),
     PrevPage,
     NextPage,
@@ -59,78 +75,211 @@ impl ImageViewerView {
         }
     }
 
-    pub fn subscription(&self) -> iced::Subscription<Message> {
-        keyboard::on_key_press(|key, _| match key {
-            Key::Named(Named::ArrowRight) => Some(ImageViewerMessage::NextPage.into()),
-            Key::Named(Named::ArrowLeft) => Some(ImageViewerMessage::PrevPage.into()),
-            Key::Named(Named::ArrowUp) => Some(
-                ImageViewerMessage::ScrollBy(scrollable::AbsoluteOffset {
-                    x: 0.0,
-                    y: -Self::SCROLL_OFFSET,
-                })
-                .into(),
-            ),
-            Key::Named(Named::ArrowDown) => Some(
-                ImageViewerMessage::ScrollBy(scrollable::AbsoluteOffset {
-                    x: 0.0,
-                    y: Self::SCROLL_OFFSET,
-                })
-                .into(),
-            ),
-            _ => None,
-        })
+    pub fn subscription(&self) -> Subscription<Message> {
+        Subscription::batch([
+            event::listen_with(|event, _, _| {
+                if let Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event {
+                    match key {
+                        Key::Named(Named::ArrowRight) => Some(ImageViewerMessage::NextPage.into()),
+                        Key::Named(Named::ArrowLeft) => Some(ImageViewerMessage::PrevPage.into()),
+                        Key::Named(Named::ArrowUp) => Some(
+                            ImageViewerMessage::ScrollBy(scrollable::AbsoluteOffset {
+                                x: 0.0,
+                                y: -Self::SCROLL_OFFSET,
+                            })
+                            .into(),
+                        ),
+                        Key::Named(Named::ArrowDown) => Some(
+                            ImageViewerMessage::ScrollBy(scrollable::AbsoluteOffset {
+                                x: 0.0,
+                                y: Self::SCROLL_OFFSET,
+                            })
+                            .into(),
+                        ),
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            }),
+            Subscription::run_with(self.file_path.clone(), |path| {
+                let path = path.clone();
+                stream::channel(
+                    8,
+                    |mut output: iced::futures::channel::mpsc::Sender<Message>| async move {
+                        if !path.exists() {
+                            match output
+                                .send(Message::PostToast(Toast::error(
+                                    "Could not load chapter".into(),
+                                    "Path does not exist".into(),
+                                )))
+                                .await
+                            {
+                                Ok(()) => {}
+                                Err(e) => {
+                                    error!("Error sending toast: {}", e);
+                                }
+                            };
+                            return;
+                        }
+
+                        if path.is_dir() {
+                            // get file count and return PreloadImages, then iterate over them
+                            let mut file_count = 0;
+                            let mut dir = read_dir(path).await.unwrap();
+                            let mut paths = Vec::new();
+                            while let Ok(entry) = dir.next_entry().await {
+                                let entry = entry.unwrap();
+                                if entry.file_type().await.unwrap().is_file() {
+                                    paths.push(entry.path());
+                                    file_count += 1;
+                                }
+                            }
+
+                            match output
+                                .send(
+                                    ImageViewerMessage::PreloadImages {
+                                        total_images: file_count,
+                                    }
+                                    .into(),
+                                )
+                                .await
+                            {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    error!("Error preloading images: {}", e);
+                                }
+                            }
+
+                            for (i, path) in paths.iter().enumerate() {
+                                let contents = tokio::fs::read(path).await.unwrap();
+                                let image = image::load_from_memory(&contents).unwrap().to_rgba8();
+                                let (width, height) = image.dimensions();
+
+                                match output
+                                    .send(
+                                        ImageViewerMessage::LoadedImage {
+                                            handle: Handle::from_rgba(
+                                                width,
+                                                height,
+                                                image.into_raw(),
+                                            ),
+                                            height,
+                                            index: i,
+                                        }
+                                        .into(),
+                                    )
+                                    .await
+                                {
+                                    Ok(()) => {}
+                                    Err(e) => {
+                                        error!("Error loading image: {}", e);
+                                    }
+                                }
+                            }
+
+                            return;
+                        }
+
+                        if let Some(extension) = path.extension() {
+                            if extension == "cbz" {
+                                let mut file = BufReader::new(File::open(path).await.unwrap());
+                                let mut zip = ZipFileReader::with_tokio(&mut file).await.unwrap();
+
+                                // TODO: Check how many actual images and ignore other files
+                                let total_images = zip.file().entries().len();
+
+                                match output
+                                    .send(ImageViewerMessage::PreloadImages { total_images }.into())
+                                    .await
+                                {
+                                    Ok(()) => {}
+                                    Err(e) => {
+                                        error!("Error preloading images: {}", e);
+                                    }
+                                }
+
+                                // Add priority system so files near the current page are loaded first
+                                for i in 0..total_images {
+                                    let mut f = zip.reader_without_entry(i).await.unwrap();
+                                    let mut buffer = vec![];
+                                    f.read_to_end(&mut buffer).await.unwrap();
+                                    let image =
+                                        image::load_from_memory(&buffer).unwrap().to_rgba8();
+                                    let (width, height) = image.dimensions();
+
+                                    match output
+                                        .send(
+                                            ImageViewerMessage::LoadedImage {
+                                                handle: Handle::from_rgba(
+                                                    width,
+                                                    height,
+                                                    image.into_raw(),
+                                                ),
+                                                height,
+                                                index: i,
+                                            }
+                                            .into(),
+                                        )
+                                        .await
+                                    {
+                                        Ok(()) => {}
+                                        Err(e) => {
+                                            error!("Error loading image: {}", e);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                )
+            }),
+        ])
     }
 
     pub fn on_enter(state: &mut AppState) -> Task<Message> {
-        if let View::ImageViewer(v) = &mut state.view {
-            let path = v.file_path.clone();
-            return Task::future(async move {
-                if let Some(extension) = path.extension() {
-                    if extension == "cbz" {
-                        let file = File::open(path).unwrap();
-                        let mut zip = ZipArchive::new(file).unwrap();
-                        let mut images = vec![];
-                        for i in 0..zip.len() {
-                            let mut f = zip.by_index(i).unwrap();
-                            let mut buffer = vec![];
-                            f.read_to_end(&mut buffer).unwrap();
-                            let bytes = Bytes::from(buffer);
-                            images.push(Handle::from_bytes(bytes));
-                        }
-                        return ImageViewerMessage::LoadedImages(images).into();
-                    }
-                }
-
-                ImageViewerMessage::LoadedImages(vec![]).into()
-            });
-        }
-
         Task::none()
     }
 
     pub fn view(&self, state: &AppState) -> iced::Element<'_, Message> {
         let clickable_area = container(row![
-            mouse_area(Space::new(Length::FillPortion(2), Length::Fill))
-                .on_press(ImageViewerMessage::PrevPage.into()),
-            mouse_area(Space::new(Length::FillPortion(1), Length::Fill)),
-            mouse_area(Space::new(Length::FillPortion(2), Length::Fill))
-                .on_press(ImageViewerMessage::NextPage.into())
+            mouse_area(
+                Space::new()
+                    .width(Length::FillPortion(2))
+                    .height(Length::Fill)
+            )
+            .on_press(ImageViewerMessage::PrevPage.into()),
+            mouse_area(
+                Space::new()
+                    .width(Length::FillPortion(1))
+                    .height(Length::Fill)
+            ),
+            mouse_area(
+                Space::new()
+                    .width(Length::FillPortion(2))
+                    .height(Length::Fill)
+            )
+            .on_press(ImageViewerMessage::NextPage.into())
         ]);
 
-        let image_area = if self.images.len() > 0 {
-            Scrollable::new(stack![
-                center(widget::image(self.images[self.cur_page - 1].clone()))
-                    .center_y(iced::Length::Shrink),
-                clickable_area
-            ])
-            .width(iced::Length::Fill)
-            .height(iced::Length::Fill)
-            .id(scrollable::Id::new(SCROLLABLE))
-        } else {
-            Scrollable::new(text("Loading..."))
+        let image: Element<Message> = match self.images.get(self.cur_page - 1) {
+            Some(e) => match e {
+                Some(i) => widget::image(i.0.clone()).height(i.1 as f32).into(),
+                None => Space::new().width(Length::Fill).height(Length::Fill).into(),
+            },
+            None => Scrollable::new(text("Loading..."))
                 .width(iced::Length::Fill)
                 .height(iced::Length::Fill)
+                .into(),
         };
+
+        let image_area = Scrollable::new(stack![
+            center(image).center_y(iced::Length::Shrink),
+            clickable_area
+        ])
+        .width(iced::Length::Fill)
+        .height(iced::Length::Fill)
+        .id(SCROLLABLE);
 
         column![
             row![
@@ -156,26 +305,30 @@ impl ImageViewerView {
     pub fn update(m: ImageViewerMessage, state: &mut AppState) -> Task<Message> {
         if let View::ImageViewer(v) = &mut state.view {
             match m {
-                ImageViewerMessage::LoadedImages(images) => {
-                    v.images = images;
-                    if v.cur_page > v.images.len() {
-                        v.cur_page = v.images.len();
-                    }
+                ImageViewerMessage::PreloadImages { total_images } => {
+                    v.images = vec![None; total_images];
+                }
+                ImageViewerMessage::LoadedImage {
+                    handle,
+                    height,
+                    index,
+                } => {
+                    v.images[index] = Some((handle, height));
                 }
                 ImageViewerMessage::PrevPage => {
                     if v.cur_page > 1 {
                         v.cur_page -= 1;
-                        return snap_to(Id::new(SCROLLABLE), scrollable::RelativeOffset::START);
+                        return snap_to(SCROLLABLE, scrollable::RelativeOffset::START);
                     }
                 }
                 ImageViewerMessage::NextPage => {
                     if v.cur_page < v.images.len() {
                         v.cur_page += 1;
-                        return snap_to(Id::new(SCROLLABLE), scrollable::RelativeOffset::START);
+                        return snap_to(SCROLLABLE, scrollable::RelativeOffset::START);
                     }
                 }
                 ImageViewerMessage::ScrollBy(offset) => {
-                    return scroll_by(Id::new(SCROLLABLE), offset);
+                    return scroll_by(SCROLLABLE, offset);
                 }
             }
         }

@@ -6,7 +6,7 @@ use iced::{
 use crate::{
     db::{
         Index, Repositories,
-        index::{IndexRepository, NovelTag},
+        index::{IndexRepository, MangaTag},
     },
     ui::{
         AppState, Message,
@@ -61,7 +61,7 @@ impl AddNovelView {
                 AddNovelMessage::AddNovel => {
                     if let Some(repositories) = &state.repositories {
                         let repositories = repositories.clone();
-                        let novel: Index<NovelTag> =
+                        let novel: Index<MangaTag> =
                             Index::new_signed(v.title.clone(), 0, &state.config.private_key());
                         return Task::future(async move {
                             repositories.index().await.add_index(novel).await.unwrap();

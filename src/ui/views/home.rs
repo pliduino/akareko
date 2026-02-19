@@ -42,6 +42,12 @@ impl HomeView {
             button(text("SaveTorrent")).on_press(Message::SaveTorrent),
             button(text("User List"))
                 .on_press(Message::ChangeView(View::UserList(UserListView::new()))),
+            button(text("Toast test")).on_press(Message::PostToast(
+                crate::ui::components::toast::Toast::error(
+                    "Success".into(),
+                    "This is a success toast".into()
+                )
+            )),
         ]
         .into()
     }

@@ -1,7 +1,7 @@
 use crate::{
     db::{
         IndexTag, Repositories, TaggedIndex,
-        index::{IndexRepository, NovelTag},
+        index::{IndexRepository, MangaTag},
     },
     server::{ServerState, handler::AuroraProtocolCommand, protocol::AuroraProtocolResponse},
 };
@@ -17,7 +17,7 @@ impl AuroraProtocolCommand for GetAllIndexes {
         state: &ServerState,
     ) -> AuroraProtocolResponse<Self::ResponsePayload> {
         match req.tag.as_str() {
-            NovelTag::TAG => {
+            MangaTag::TAG => {
                 let indexes = state.repositories.index().await.get_indexes().await;
                 AuroraProtocolResponse::ok(GetAllIndexesResponse {
                     indexes: indexes.into_iter().map(TaggedIndex::from).collect(),

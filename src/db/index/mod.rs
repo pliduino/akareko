@@ -19,37 +19,37 @@ mod surreal;
 pub use surreal::IndexRepository;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NovelTag;
+pub struct MangaTag;
 
-impl IndexTag for NovelTag {
-    const TAG: &'static str = "novels";
-    const CONTENT_TABLE: &'static str = "novel_chapters";
-    type Content = NovelChapter;
+impl IndexTag for MangaTag {
+    const TAG: &'static str = "mangas";
+    const CONTENT_TABLE: &'static str = "manga_chapters";
+    type Content = MangaChapter;
 }
 
 /// Helper for vectors with multiple tags
 #[derive(Debug, Clone)]
 pub enum TaggedContent {
-    Novel(Content<NovelTag>),
+    Manga(Content<MangaTag>),
 }
 
 impl TaggedContent {
     pub fn index_hash(&self) -> &Hash {
         match self {
-            TaggedContent::Novel(content) => content.index_hash(),
+            TaggedContent::Manga(content) => content.index_hash(),
         }
     }
 
     pub fn verify(&self) -> bool {
         match self {
-            TaggedContent::Novel(content) => content.verify(),
+            TaggedContent::Manga(content) => content.verify(),
         }
     }
 }
 
-impl From<Content<NovelTag>> for TaggedContent {
-    fn from(value: Content<NovelTag>) -> Self {
-        TaggedContent::Novel(value)
+impl From<Content<MangaTag>> for TaggedContent {
+    fn from(value: Content<MangaTag>) -> Self {
+        TaggedContent::Manga(value)
     }
 }
 
@@ -59,8 +59,8 @@ impl Byteable for TaggedContent {
         writer: &mut W,
     ) -> Result<(), EncodeError> {
         match self {
-            TaggedContent::Novel(content) => {
-                NovelTag::TAG.to_string().encode(writer).await?;
+            TaggedContent::Manga(content) => {
+                MangaTag::TAG.to_string().encode(writer).await?;
                 content.encode(writer).await
             }
         }
@@ -69,8 +69,8 @@ impl Byteable for TaggedContent {
     async fn decode<R: AsyncRead + Unpin + Send>(reader: &mut R) -> Result<Self, DecodeError> {
         let tag = String::decode(reader).await?;
         match tag.as_str() {
-            NovelTag::TAG => Ok(TaggedContent::Novel(
-                Content::<NovelTag>::decode(reader).await?,
+            MangaTag::TAG => Ok(TaggedContent::Manga(
+                Content::<MangaTag>::decode(reader).await?,
             )),
             _ => Err(DecodeError::InvalidEnumVariant {
                 variant_value: tag,
@@ -81,17 +81,17 @@ impl Byteable for TaggedContent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, byteable_derive::Byteable)]
-pub struct NovelChapter {
+pub struct MangaChapter {
     pub language: Language,
 }
 
-impl NovelChapter {
-    pub fn new(language: Language) -> NovelChapter {
-        NovelChapter { language }
+impl MangaChapter {
+    pub fn new(language: Language) -> MangaChapter {
+        MangaChapter { language }
     }
 }
 
-impl ToBytes for NovelChapter {
+impl ToBytes for MangaChapter {
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
         bytes.extend((self.language.clone() as u16).to_be_bytes());

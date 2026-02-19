@@ -15,6 +15,16 @@ pub struct Toast {
     pub ty: ToastType,
 }
 
+impl Toast {
+    pub fn error(title: String, body: String) -> Self {
+        Self {
+            title,
+            body,
+            ty: ToastType::Error,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ToastType {
     Info,
@@ -33,32 +43,35 @@ impl Toast {
 }
 
 pub fn toast_worker() -> impl iced::futures::Stream<Item = Message> {
-    stream::channel(100, |mut output| async move {
-        let (tx, mut rx) = mpsc::channel::<Toast>(100);
-        match output.send(Message::ToastSenderReady(tx)).await {
-            Ok(()) => {}
-            Err(e) => {
-                // This should honestly never happen, it's here just in case
-                error!("Error initializing toast subscriptions: {}", e);
-            }
-        };
-
-        loop {
-            let toast = match rx.recv().await {
-                Some(toast) => toast,
-                None => break,
-            };
-
-            match output.send(Message::PostToast(toast)).await {
+    stream::channel(
+        100,
+        |mut output: futures::channel::mpsc::Sender<Message>| async move {
+            let (tx, mut rx) = mpsc::channel::<Toast>(100);
+            match output.send(Message::ToastSenderReady(tx)).await {
                 Ok(()) => {}
                 Err(e) => {
-                    if e.is_disconnected() {
-                        error!("Disconnected from toast output");
-                    } else if e.is_full() {
-                        error!("Toast output is full");
-                    }
+                    // This should honestly never happen, it's here just in case
+                    error!("Error initializing toast subscriptions: {}", e);
                 }
             };
-        }
-    })
+
+            loop {
+                let toast = match rx.recv().await {
+                    Some(toast) => toast,
+                    None => break,
+                };
+
+                match output.send(Message::PostToast(toast)).await {
+                    Ok(()) => {}
+                    Err(e) => {
+                        if e.is_disconnected() {
+                            error!("Disconnected from toast output");
+                        } else if e.is_full() {
+                            error!("Toast output is full");
+                        }
+                    }
+                };
+            }
+        },
+    )
 }

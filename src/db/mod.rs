@@ -1,7 +1,5 @@
 use std::{fmt::Debug, marker::PhantomData};
 
-use deadpool_sqlite::Pool;
-use futures::SinkExt;
 use rclite::Arc;
 
 use serde::{Deserialize, Deserializer, Serialize};
@@ -20,7 +18,7 @@ use crate::db::comments::PostRepository;
 use crate::{
     config::AuroraConfig,
     db::{
-        index::{IndexRepository, NovelTag, TaggedContent},
+        index::{IndexRepository, MangaTag, TaggedContent},
         user::{User, UserRepository},
     },
     errors::{DatabaseError, DecodeError, EncodeError},
@@ -174,11 +172,11 @@ impl Repositories {
 
         let novel_tag = count;
 
-        let novels: Vec<Content<NovelTag>> = self
+        let novels: Vec<Content<MangaTag>> = self
             .db
             .query(format!(
                 "SELECT * FROM {} ORDER BY rand() LIMIT $count",
-                NovelTag::CONTENT_TABLE
+                MangaTag::CONTENT_TABLE
             ))
             .bind(("count", novel_tag))
             .await?
@@ -193,11 +191,11 @@ impl Repositories {
         UserRepository::new(&self.db)
     }
 
-    pub async fn index(&self) -> IndexRepository {
+    pub async fn index(&self) -> IndexRepository<'_> {
         IndexRepository::new(&self.db)
     }
 
-    pub async fn posts(&self) -> PostRepository {
+    pub async fn posts(&self) -> PostRepository<'_> {
         PostRepository::new(&self.db)
     }
 }
@@ -514,7 +512,7 @@ impl<T: IndexTag> Byteable for Index<T> {
 }
 
 pub enum TaggedIndex {
-    Novel(Index<NovelTag>),
+    Novel(Index<MangaTag>),
 }
 
 impl TaggedIndex {
@@ -532,7 +530,7 @@ impl Byteable for TaggedIndex {
     ) -> Result<(), EncodeError> {
         match self {
             TaggedIndex::Novel(index) => {
-                NovelTag::TAG.to_string().encode(writer).await?;
+                MangaTag::TAG.to_string().encode(writer).await?;
                 index.encode(writer).await?;
             }
         }
@@ -543,7 +541,7 @@ impl Byteable for TaggedIndex {
     async fn decode<R: AsyncRead + Unpin + Send>(reader: &mut R) -> Result<Self, DecodeError> {
         let tag = String::decode(reader).await?;
         match tag.as_str() {
-            NovelTag::TAG => Ok(TaggedIndex::Novel(Index::decode(reader).await?)),
+            MangaTag::TAG => Ok(TaggedIndex::Novel(Index::decode(reader).await?)),
             _ => Err(DecodeError::InvalidEnumVariant {
                 variant_value: tag,
                 enum_name: stringify!(TaggedIndex),
@@ -552,8 +550,8 @@ impl Byteable for TaggedIndex {
     }
 }
 
-impl From<Index<NovelTag>> for TaggedIndex {
-    fn from(index: Index<NovelTag>) -> Self {
+impl From<Index<MangaTag>> for TaggedIndex {
+    fn from(index: Index<MangaTag>) -> Self {
         TaggedIndex::Novel(index)
     }
 }

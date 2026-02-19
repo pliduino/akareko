@@ -1,18 +1,18 @@
 use anawt::{AnawtTorrentStatus, InfoHash, TorrentState};
 use iced::{
-    Color, Length, Subscription, Task,
-    widget::{Column, button, image, row, svg, text},
+    Color, Element, Length, Subscription, Task,
+    widget::{Column, button, image, progress_bar, row, svg, text},
 };
 use tokio::sync::watch;
 use tracing::info;
 
 use crate::{
-    db::{Content, Index, IndexTag, comments::Topic, index::NovelTag},
+    db::{Content, Index, IndexTag, comments::Topic, index::MangaTag},
     hash::Hash,
     helpers::SanitizedString,
     ui::{
         AppState, Message,
-        icons::{CHAT_ICON, SEEN_ICON, UNSEEN_ICON},
+        icons::{CHAT_ICON, CHECK_CIRCLE_ICON, DOWNLOAD_ICON, SEEN_ICON, UNSEEN_ICON},
         style,
         views::{
             View, ViewMessage, add_chapter::AddNovelChapterView, image_viewer::ImageViewerView,
@@ -23,14 +23,14 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct NovelView {
-    novel: Index<NovelTag>,
-    chapters: Vec<Content<NovelTag>>,
+    novel: Index<MangaTag>,
+    chapters: Vec<Content<MangaTag>>,
     pub torrents: Vec<Option<watch::Receiver<AnawtTorrentStatus>>>,
 }
 
 #[derive(Debug, Clone)]
 pub enum NovelMessage {
-    ContentLoaded(Vec<Content<NovelTag>>),
+    ContentLoaded(Vec<Content<MangaTag>>),
     LoadedTorrentWatcher(Vec<Option<watch::Receiver<AnawtTorrentStatus>>>),
     ReloadTorrents,
     DownloadTorrentAndReload { magnet: String, path: String },
@@ -45,7 +45,7 @@ impl From<NovelMessage> for Message {
 }
 
 impl NovelView {
-    pub fn new(novel: Index<NovelTag>) -> Self {
+    pub fn new(novel: Index<MangaTag>) -> Self {
         Self {
             novel,
             chapters: vec![],
@@ -102,44 +102,67 @@ impl NovelView {
                 None => ContentState::Download,
             };
 
-            //         text(format!("Downloading: {:.1}", status.progress * 100.0))
             for (j, e) in chapter.entries().iter().enumerate() {
+                let download_element: Element<Message> = match select_message {
+                    ContentState::Downloading(p) => progress_bar(0.0..=1.0, p as f32).into(),
+                    ContentState::Download => button(
+                        svg(svg::Handle::from_memory(DOWNLOAD_ICON))
+                            .height(Length::Fixed(24.0))
+                            .width(Length::Fixed(24.0))
+                            .style(|t, _| svg::Style {
+                                color: Some(Color::WHITE),
+                            }),
+                    )
+                    .style(style::icon_button)
+                    .on_press(
+                        NovelMessage::DownloadTorrentAndReload {
+                            magnet: chapter.magnet_link.clone().0,
+                            path: format!(
+                                "./data/{}/{}/{}",
+                                MangaTag::TAG,
+                                SanitizedString::new(self.novel.title()).as_str(),
+                                chapter.signature().as_base64_url()
+                            ),
+                        }
+                        .into(),
+                    )
+                    .into(),
+                    ContentState::Ready => button(
+                        svg(svg::Handle::from_memory(CHECK_CIRCLE_ICON))
+                            .height(24.0)
+                            .width(24.0)
+                            .style(|_, _| svg::Style {
+                                color: Some(Color::WHITE),
+                            }),
+                    )
+                    .style(style::icon_button)
+                    .into(),
+                };
+
                 column.push(
                     row![
-                        button(text(e.title.clone())).on_press_maybe(match select_message {
-                            ContentState::Downloading(_) => None,
-                            ContentState::Download => Some(
-                                NovelMessage::DownloadTorrentAndReload {
-                                    magnet: chapter.magnet_link.clone().0,
-                                    path: format!(
-                                        "./data/{}/{}/{}",
-                                        NovelTag::TAG,
-                                        SanitizedString::new(self.novel.title()).as_str(),
-                                        chapter.signature().as_base64_url()
-                                    ),
-                                }
-                                .into()
-                            ),
-                            ContentState::Ready => Some(Message::ChangeView(View::ImageViewer(
-                                ImageViewerView::new(
-                                    format!(
-                                        "./data/{}/{}/{}/{}",
-                                        NovelTag::TAG,
-                                        SanitizedString::new(self.novel.title()).as_str(),
-                                        chapter.signature().as_base64_url(),
-                                        chapter.entries()[j].path
-                                    )
-                                    .into(),
-                                )
-                            ))),
-                        }),
-                        match select_message {
-                            ContentState::Downloading(p) => {
-                                text(format!("Downloading: {:.1}", p * 100.0))
-                            }
-                            ContentState::Download => text("---"),
-                            ContentState::Ready => text("R"),
-                        },
+                        button(text(e.title.clone()))
+                            .on_press_maybe(match select_message {
+                                ContentState::Downloading(_) => None,
+                                ContentState::Download => None,
+                                ContentState::Ready =>
+                                    Some(Message::ChangeView(View::ImageViewer(
+                                        // TODO: Instead of using the chapter signature for the path
+                                        // we should use the hash of the torrent
+                                        ImageViewerView::new(
+                                            format!(
+                                                "./data/{}/{}/{}/{}",
+                                                MangaTag::TAG,
+                                                SanitizedString::new(self.novel.title()).as_str(),
+                                                chapter.signature().as_base64_url(),
+                                                chapter.entries()[j].path
+                                            )
+                                            .into(),
+                                        )
+                                    ))),
+                            })
+                            .width(Length::Fill),
+                        download_element,
                         if e.progress < 1.0 {
                             button(
                                 svg(svg::Handle::from_memory(UNSEEN_ICON))
@@ -181,7 +204,7 @@ impl NovelView {
             }
         }
 
-        Column::from_vec(column).into()
+        Column::from_vec(column).width(Length::Fill).into()
     }
 
     pub fn update(m: NovelMessage, state: &mut AppState) -> Task<Message> {

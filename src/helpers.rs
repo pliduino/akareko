@@ -47,6 +47,7 @@ impl SanitizedString {
 #[derive(Debug, Clone, Serialize, Deserialize, byteable_derive::Byteable)]
 #[repr(u16)]
 pub enum Language {
+    Japanese,
     English,
     French,
     Portuguese,

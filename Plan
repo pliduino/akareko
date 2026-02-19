@@ -10,10 +10,15 @@ Delete database without deleting config -> Recreating the db doesn't restore the
 
 Double page mode (check image proportion), strip mode
 Zoom in/out
-preload pages
 
 Content that's only different by the timestamp gets replaced with the newer one
 
 Implement groups in a way that we could revoke access to posting on it without needing all members that post to have the main key
 
 Automatically save torrents periodically and on exit
+
+Hide/Highlight Tags
+
+Bookmarks/Bookmark Folders/Notifications
+
+Change the way we store magnets

@@ -50,17 +50,20 @@ byteable-derive = { path = "./byteable-derive" }
 cxx = "1.0.186"
 bitflags = "2.9.4"
 anawt = { git = "https://github.com/pliduino/anawt.git", branch = "develop" }
-iced = { version = "0.13.1", features = ["tokio", "image", "svg"] }
-iced_aw = "0.12.2"
-zip = "5.1.1"
+iced = { version = "0.14.0", features = ["tokio", "image", "svg", "sipper"] }
+iced_aw = "0.13.0"
+# zip = "5.1.1"
 bytes = "1.10.1"
 error_set = "0.9.0"
 rclite = "0.3.0"
 
 #rusqlite = { version = "0.37.0", features = ["bundled"] }
-deadpool-sqlite = { version = "0.12.1", features = ["bundled"] }
-refinery = { version = "0.9.0", features = ["rusqlite"] }
+# deadpool-sqlite = { version = "0.12.1", features = ["bundled"] }
+# refinery = { version = "0.9.0", features = ["rusqlite"] }
 const_format = "0.2.35"
+image = "0.25.9"
+# rc-zip-tokio = "4.3.1"
+async_zip = { version = "0.0.18", features = ["tokio", "tokio-fs", "zstd", "lzma", "xz", "bzip2", "deflate"]}
 
 [features]
 default = ["surrealdb"]
@@ -69,7 +72,7 @@ surrealdb = []
 sqlite = []
 
 [profile.release]
-lto = true
+lto = "fat"
 strip = true
 opt-level = 3
 panic = "abort"

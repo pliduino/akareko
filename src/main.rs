@@ -47,18 +47,22 @@ fn main() -> Result<(), ()> {
 
     info!("Initializing Application...");
 
-    iced::daemon("Aurora", AppState::update, AppState::view)
-        .subscription(AppState::subscription)
-        .theme(|s, _| s.theme())
-        .run_with(|| {
+    iced::daemon(
+        || {
             (
                 AppState::new(),
                 Task::done(Message::OpenWindow).chain(Task::perform(AuroraConfig::load(), |c| {
                     Message::ConfigLoaded(c)
                 })),
             )
-        })
-        .unwrap();
+        },
+        AppState::update,
+        AppState::view,
+    )
+    .subscription(AppState::subscription)
+    .theme(|s: &AppState, _| s.theme())
+    .run()
+    .unwrap();
 
     Ok(())
 }

@@ -6,7 +6,7 @@ use iced::{
 use crate::{
     db::{
         Index, Repositories,
-        index::{IndexRepository, NovelTag},
+        index::{IndexRepository, MangaTag},
     },
     ui::{
         AppState, Message,
@@ -16,12 +16,12 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct NovelListView {
-    novels: Vec<Index<NovelTag>>,
+    novels: Vec<Index<MangaTag>>,
 }
 
 #[derive(Debug, Clone)]
 pub enum NovelListMessage {
-    LoadedNovels(Vec<Index<NovelTag>>),
+    LoadedNovels(Vec<Index<MangaTag>>),
 }
 
 impl From<NovelListMessage> for Message {

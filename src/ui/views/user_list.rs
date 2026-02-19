@@ -6,7 +6,7 @@ use iced::{
 use crate::{
     db::{
         Index, Repositories,
-        index::{IndexRepository, NovelTag},
+        index::{IndexRepository, MangaTag},
         user::{User, UserRepository},
     },
     ui::{

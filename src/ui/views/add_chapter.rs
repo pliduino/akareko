@@ -6,7 +6,7 @@ use iced::{
 use crate::{
     db::{
         Content, ContentEntry, Index, Magnet,
-        index::{NovelChapter, NovelTag},
+        index::{MangaChapter, MangaTag},
     },
     helpers::{Language, now_timestamp},
     ui::{
@@ -24,7 +24,7 @@ struct ContentEntryValues {
 
 #[derive(Debug, Clone)]
 pub struct AddNovelChapterView {
-    novel: Index<NovelTag>,
+    novel: Index<MangaTag>,
     magnet: String,
     entries: Vec<ContentEntryValues>,
 }
@@ -50,7 +50,7 @@ impl From<AddNovelChapterMessage> for Message {
 }
 
 impl AddNovelChapterView {
-    pub fn new(novel: Index<NovelTag>) -> Self {
+    pub fn new(novel: Index<MangaTag>) -> Self {
         Self {
             novel,
             magnet: String::new(),
@@ -110,14 +110,14 @@ impl AddNovelChapterView {
                     if let Some(repositories) = &state.repositories {
                         let index_hash = v.novel.hash().clone();
 
-                        let entries: Vec<ContentEntry<NovelTag>> = v
+                        let entries: Vec<ContentEntry<MangaTag>> = v
                             .entries
                             .iter()
                             .map(|e| ContentEntry {
                                 title: e.title.clone(),
                                 enumeration: e.enumeration,
                                 path: e.path.clone(),
-                                content: NovelChapter::new(Language::English),
+                                content: MangaChapter::new(Language::English),
                                 progress: 0.0,
                             })
                             .collect();

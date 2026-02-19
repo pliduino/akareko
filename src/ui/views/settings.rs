@@ -86,7 +86,7 @@ impl SettingsView {
             tooltip(
                 row![
                     text("Relay: "),
-                    checkbox("", self.config.is_relay())
+                    checkbox(self.config.is_relay())
                         .on_toggle(|b| { SettingsMessage::UpdateRelay(b).into() }),
                 ],
                 container("Enables other users to query your node for content")
@@ -97,7 +97,7 @@ impl SettingsView {
             tooltip(
                 row![
                     text("Dev Mode: "),
-                    checkbox("", self.config.dev_mode())
+                    checkbox(self.config.dev_mode())
                         .on_toggle(|b| { SettingsMessage::UpdatedDevMode(b).into() }),
                 ],
                 container("Enables adding content")

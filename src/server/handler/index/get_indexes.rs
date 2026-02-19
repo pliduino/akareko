@@ -1,7 +1,7 @@
 use crate::{
     db::{
         IndexTag, Repositories, TaggedIndex,
-        index::{IndexRepository, NovelTag},
+        index::{IndexRepository, MangaTag},
     },
     hash::Hash,
     server::{ServerState, handler::AuroraProtocolCommand, protocol::AuroraProtocolResponse},
@@ -22,7 +22,7 @@ impl AuroraProtocolCommand for GetIndexes {
             let repo = state.repositories.clone();
             let handle = tokio::spawn(async move {
                 match s.as_str() {
-                    NovelTag::TAG => {
+                    MangaTag::TAG => {
                         let novel_repo = repo.index().await;
                         match novel_repo.get_index(&hash).await {
                             Ok(index) => match index {
