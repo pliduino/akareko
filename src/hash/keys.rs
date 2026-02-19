@@ -26,6 +26,10 @@ impl Signature {
         Signature([0u8; 64])
     }
 
+    pub fn to_inner(self) -> [u8; 64] {
+        self.0
+    }
+
     pub fn as_base64(&self) -> String {
         STANDARD_NO_PAD.encode(&self.0)
     }

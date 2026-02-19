@@ -14,22 +14,50 @@ mod surreal;
 #[cfg(feature = "surrealdb")]
 pub use surreal::PostRepository;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct Topic(Hash);
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Topic([u8; 64]);
+
+impl Serialize for Topic {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_bytes(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for Topic {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes = Vec::deserialize(deserializer)?;
+        match bytes.try_into() {
+            Ok(hash) => Ok(Self(hash)),
+            Err(b) => Err(serde::de::Error::custom(format!(
+                "Invalid length, expected 64 bytes, got {}",
+                b.len()
+            ))),
+        }
+    }
+}
 
 impl Topic {
     pub fn from_index<I: IndexTag>(index: &Index<I>) -> Self {
-        Self(index.hash().clone())
+        Self(index.hash().inner().clone())
+    }
+
+    pub fn from_post(post: &Post) -> Self {
+        Self(post.signature.clone().to_inner())
     }
 
     pub fn from_entry<I: IndexTag>(index: &Index<I>, enumeration: f32) -> Self {
         let mut bytes = index.hash().inner().to_vec();
         bytes.extend(enumeration.to_le_bytes());
-        Self(Hash::digest(&bytes))
+        Self(Hash::digest(&bytes).to_inner())
     }
 
-    pub fn inner(&self) -> &Hash {
+    pub fn inner(&self) -> &[u8; 64] {
         &self.0
     }
 }
@@ -118,7 +146,7 @@ impl Post {
     }
 
     fn sign_bytes(&self) -> Vec<u8> {
-        let mut bytes: Vec<u8> = self.topic.inner().inner().to_vec();
+        let mut bytes: Vec<u8> = self.topic.inner().to_vec();
         bytes.extend(self.content.as_bytes());
         bytes.extend(self.timestamp.to_le_bytes());
         bytes
