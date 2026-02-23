@@ -2,6 +2,7 @@ use iced::{
     Subscription, Task,
     widget::{Button, Column, button, column, row, text},
 };
+use tracing::error;
 
 use crate::{
     db::{
@@ -10,6 +11,7 @@ use crate::{
     },
     ui::{
         AppState, Message,
+        components::toast::Toast,
         views::{View, ViewMessage, add_novel::AddNovelView, novel::NovelView},
     },
 };
@@ -44,7 +46,16 @@ impl NovelListView {
             let repositories = repositories.clone();
 
             return Task::future(async move {
-                let novels = repositories.index().await.get_indexes().await;
+                let novels = match repositories.index().await.get_all_indexes().await {
+                    Ok(novels) => novels,
+                    Err(e) => {
+                        error!("Failed to get all indexes: {}", e);
+                        return Message::PostToast(Toast::error(
+                            "Failed to get all indexes".into(),
+                            e.to_string(),
+                        ));
+                    }
+                };
                 NovelListMessage::LoadedNovels(novels).into()
             });
         }

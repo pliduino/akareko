@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use surrealdb_types::SurrealValue;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
@@ -80,7 +81,7 @@ impl Byteable for TaggedContent {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, byteable_derive::Byteable)]
+#[derive(Debug, Clone, Serialize, Deserialize, SurrealValue, byteable_derive::Byteable)]
 pub struct MangaChapter {
     pub language: Language,
 }

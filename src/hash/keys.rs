@@ -6,6 +6,7 @@ use ed25519_dalek::{SigningKey, ed25519::signature::SignerMut};
 use rand::rngs::OsRng;
 use serde::de::Error as DeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use surrealdb::types::{Bytes, SerializationError, SurrealValue};
 use zeroize::ZeroizeOnDrop;
 
 use crate::errors::Base64Error;
@@ -18,7 +19,70 @@ pub struct PrivateKey(#[serde(with = "serde_bytes")] [u8; 32]);
 #[serde(transparent)]
 pub struct PublicKey(#[serde(with = "serde_bytes")] [u8; 32]);
 
-#[derive(Debug, Clone, Serialize, Deserialize, byteable_derive::Byteable)]
+impl AsRef<[u8]> for PublicKey {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl SurrealValue for PublicKey {
+    fn kind_of() -> surrealdb::types::Kind {
+        surrealdb::types::Kind::String
+    }
+
+    fn into_value(self) -> surrealdb::types::Value {
+        // surrealdb::types::Value::Bytes(bytes::Bytes::from_owner(self).into())
+        surrealdb::types::Value::String(self.to_base64())
+    }
+
+    fn from_value(value: surrealdb::types::Value) -> Result<Self, surrealdb::Error>
+    where
+        Self: Sized,
+    {
+        match value.kind() {
+            surrealdb::types::Kind::String => {
+                Ok(PublicKey::from_base64(value.as_string().unwrap()).unwrap())
+            }
+            surrealdb_types::Kind::Record(_) => Ok(PublicKey::from_base64(
+                value
+                    .into_record()
+                    .unwrap()
+                    .key
+                    .into_value()
+                    .as_string()
+                    .unwrap(),
+            )
+            .unwrap()),
+            _ => Err(surrealdb::Error::serialization(
+                "PublicKey can only be made from string".to_string(),
+                Some(SerializationError::Deserialization),
+            )),
+        }
+        // let bytes = match value.as_bytes() {
+        //     Some(b) => b,
+        //     None => {
+        //         return Err(surrealdb::Error::serialization(
+        //             "PublicKey can only be made from bytes".to_string(),
+        //             Some(SerializationError::Deserialization),
+        //         ));
+        //     }
+        // };
+
+        // if bytes.len() != 32 {
+        //     return Err(surrealdb::Error::serialization(
+        //         "PublicKey needs 32 bytes".to_string(),
+        //         Some(SerializationError::Deserialization),
+        //     ));
+        // }
+
+        // //TODO: zero copy
+        // let b: &[u8] = bytes.as_ref();
+
+        // Ok(PublicKey(b.try_into().unwrap()))
+    }
+}
+
+#[derive(Debug, Hash, Clone, Serialize, Deserialize, byteable_derive::Byteable)]
 pub struct Signature(#[serde(with = "serde_bytes")] [u8; 64]);
 
 impl Signature {
@@ -48,6 +112,70 @@ impl Signature {
                 actual: b.len(),
             }),
         }
+    }
+}
+
+impl AsRef<[u8]> for Signature {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl SurrealValue for Signature {
+    fn kind_of() -> surrealdb::types::Kind {
+        surrealdb::types::Kind::String
+    }
+
+    fn into_value(self) -> surrealdb::types::Value {
+        // surrealdb::types::Value::Bytes(bytes::Bytes::from_owner(self).into())
+        surrealdb::types::Value::String(self.as_base64())
+    }
+
+    fn from_value(value: surrealdb::types::Value) -> Result<Self, surrealdb::Error>
+    where
+        Self: Sized,
+    {
+        match value.kind() {
+            surrealdb::types::Kind::String => {
+                Ok(Self::from_base64(value.as_string().unwrap()).unwrap())
+            }
+            surrealdb_types::Kind::Record(_) => Ok(Self::from_base64(
+                value
+                    .into_record()
+                    .unwrap()
+                    .key
+                    .into_value()
+                    .as_string()
+                    .unwrap(),
+            )
+            .unwrap()),
+            _ => Err(surrealdb::Error::serialization(
+                "Signature can only be made from string".to_string(),
+                Some(SerializationError::Deserialization),
+            )),
+        }
+
+        // let bytes = match value.as_bytes() {
+        //     Some(b) => b,
+        //     None => {
+        //         return Err(surrealdb::Error::serialization(
+        //             "Signature can only be made from bytes".to_string(),
+        //             Some(SerializationError::Deserialization),
+        //         ));
+        //     }
+        // };
+
+        // if bytes.len() != 64 {
+        //     return Err(surrealdb::Error::serialization(
+        //         "Signature needs 64 bytes".to_string(),
+        //         Some(SerializationError::Deserialization),
+        //     ));
+        // }
+
+        // //TODO: zero copy
+        // let b: &[u8] = bytes.as_ref();
+
+        // Ok(Signature(b.try_into().unwrap()))
     }
 }
 

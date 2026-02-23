@@ -72,6 +72,20 @@ impl<T: Byteable> Byteable for Vec<T> {
     }
 }
 
+impl Byteable for u8 {
+    async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> Result<(), EncodeError> {
+        writer.write_u8(*self).await?;
+        Ok(())
+    }
+
+    async fn decode<R: AsyncRead + Unpin + Send>(reader: &mut R) -> Result<Self, DecodeError> {
+        Ok(reader.read_u8().await?)
+    }
+}
+
 impl Byteable for u16 {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,

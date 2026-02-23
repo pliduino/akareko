@@ -8,11 +8,57 @@ use sha2::Digest;
 
 pub use keys::{PrivateKey, PublicKey, Signable, Signature};
 use serde::de::Error as DeError;
+use surrealdb_types::{Bytes, SerializationError, SurrealValue};
 
 use crate::errors::Base64Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, byteable_derive::Byteable)]
 pub struct Hash(#[serde(with = "serde_bytes")] [u8; 64]);
+
+impl AsRef<[u8]> for Hash {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl SurrealValue for Hash {
+    fn kind_of() -> surrealdb_types::Kind {
+        surrealdb_types::Kind::String
+    }
+
+    fn into_value(self) -> surrealdb_types::Value {
+        // surrealdb_types::Value::Bytes(Bytes::from(bytes::Bytes::from_owner(self)))
+        surrealdb_types::Value::String(self.as_base64())
+    }
+
+    fn from_value(value: surrealdb_types::Value) -> Result<Self, surrealdb::Error>
+    where
+        Self: Sized,
+    {
+        match value.kind() {
+            surrealdb::types::Kind::String => {
+                Ok(Hash::from_base64(value.as_string().unwrap()).unwrap())
+            }
+            surrealdb_types::Kind::Record(_) => Ok(Hash::from_base64(
+                value
+                    .into_record()
+                    .unwrap()
+                    .key
+                    .into_value()
+                    .as_string()
+                    .unwrap(),
+            )
+            .unwrap()),
+            _ => Err(surrealdb::Error::serialization(
+                "Hash can only be made from string".to_string(),
+                Some(SerializationError::Deserialization),
+            )),
+        }
+        // let bytes = value.as_bytes().unwrap();
+        // let hash = bytes.as_ref().try_into().unwrap();
+        // Ok(Hash(hash))
+    }
+}
 
 impl std::hash::Hash for Hash {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

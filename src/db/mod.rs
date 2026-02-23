@@ -4,9 +4,11 @@ use rclite::Arc;
 
 use serde::{Deserialize, Deserializer, Serialize};
 use surrealdb::{
-    RecordId, Surreal,
+    Surreal,
     engine::local::{Db, SurrealKv},
+    types::RecordId,
 };
+use surrealdb_types::{RecordIdKey, SurrealValue};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     sync::RwLock,
@@ -54,7 +56,7 @@ impl ToBytes for () {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, SurrealValue)]
 #[serde(transparent)]
 pub struct Magnet(pub String);
 
@@ -82,14 +84,7 @@ pub struct Repositories {
 
 #[cfg(feature = "sqlite")]
 impl Repositories {
-    pub async fn initialize(config: Arc<RwLock<AuroraConfig>>) -> Self {
-        use deadpool_sqlite::{Config, Runtime};
-
-        let cfg = Config::new("database/db.sqlite");
-        let db = cfg.create_pool(Runtime::Tokio1).unwrap();
-        let repositories = Repositories { db, config };
-        repositories
-    }
+    pub async fn initialize(config: Arc<RwLock<AuroraConfig>>) -> Self {}
 
     pub async fn get_random_contents(
         &self,
@@ -145,8 +140,7 @@ impl Repositories {
 
             let user_repository = repositories.user().await;
             match user_repository.get_user(&config.public_key()).await {
-                Some(_) => {}
-                None => {
+                Err(_) => {
                     use crate::db::user::TrustLevel;
 
                     let mut user = User::new_signed(
@@ -156,8 +150,10 @@ impl Repositories {
                         config.eepsite_address().clone(),
                     );
                     user.set_trust(TrustLevel::Ignore);
-                    user_repository.upsert_user(user).await.unwrap();
+                    let res = user_repository.upsert_user(user).await.unwrap();
+                    dbg!(res);
                 }
+                _ => {}
             }
         }
 
@@ -200,7 +196,7 @@ impl Repositories {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, SurrealValue)]
 pub struct ContentEntry<T: IndexTag> {
     pub title: String,
     pub enumeration: f32,
@@ -248,20 +244,9 @@ impl<T: IndexTag> Byteable for ContentEntry<T> {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound(
-    serialize = "T::Content: Serialize",
-    deserialize = "T::Content: Deserialize<'de>"
-))]
+#[derive(Debug, Clone, SurrealValue)]
 pub struct Content<T: IndexTag> {
-    #[cfg_attr(
-        feature = "surrealdb",
-        serde(
-            rename = "id",
-            skip_serializing,
-            deserialize_with = "deserialize_signature_id"
-        )
-    )]
+    #[surreal(rename = "id")]
     signature: Signature,
     source: PublicKey,
 
@@ -272,17 +257,66 @@ pub struct Content<T: IndexTag> {
     entries: Vec<ContentEntry<T>>,
 }
 
-#[cfg(feature = "surrealdb")]
-fn deserialize_signature_id<'de, D>(deserializer: D) -> Result<Signature, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let id = RecordId::deserialize(deserializer)?;
-    let key = id.key().to_string();
-    let trimmed = key.trim_start_matches("`").trim_end_matches("`");
+// impl<T: IndexTag> SurrealValue for Content<T> {
+//     fn kind_of() -> surrealdb_types::Kind {
+//         surrealdb_types::Kind::Object
+//     }
 
-    Ok(Signature::from_base64(&trimmed).unwrap())
-}
+//     fn into_value(self) -> surrealdb_types::Value {
+//         let mut obj = surrealdb_types::Object::new();
+//         obj.insert(
+//             "id",
+//             RecordId::new(
+//                 T::CONTENT_TABLE,
+//                 RecordIdKey::String(self.signature.as_base64()),
+//             ),
+//         );
+//         obj.insert("source", self.source);
+//         obj.insert("index_hash", self.index_hash);
+//         obj.insert("timestamp", self.timestamp);
+//         obj.insert("magnet_link", self.magnet_link);
+//         obj.insert("entries", self.entries);
+
+//         obj.into()
+//     }
+
+//     fn from_value(value: surrealdb_types::Value) -> Result<Self, surrealdb::Error>
+//     where
+//         Self: Sized,
+//     {
+//         let obj = value.as_object().unwrap();
+//         let id = obj.get("id").unwrap().as_record().unwrap();
+//         let source = PublicKey::from_value(obj.get("source").unwrap().clone());
+//         let index_hash = obj.get("index_hash").unwrap().as_hash().unwrap();
+//         let timestamp = obj.get("timestamp").unwrap().as_i64().unwrap() as u64;
+//         let magnet_link = obj.get("magnet_link").unwrap().as_magnet().unwrap();
+//         let entries = obj.get("entries").unwrap().as_array().unwrap();
+
+//         Ok(Self {
+//             signature: Signature::from_base64(&id.key().to_string()).unwrap(),
+//             source,
+//             index_hash,
+//             timestamp,
+//             magnet_link,
+//             entries: entries
+//                 .iter()
+//                 .map(|entry| ContentEntry::<T>::from_value(entry.clone()).unwrap())
+//                 .collect(),
+//         })
+//     }
+// }
+
+// #[cfg(feature = "surrealdb")]
+// fn deserialize_signature_id<'de, D>(deserializer: D) -> Result<Signature, D::Error>
+// where
+//     D: Deserializer<'de>,
+// {
+//     let id = RecordId::deserialize(deserializer)?;
+//     let key = id.key().to_string();
+//     let trimmed = key.trim_start_matches("`").trim_end_matches("`");
+
+//     Ok(Signature::from_base64(&trimmed).unwrap())
+// }
 
 impl<T: IndexTag> Content<T> {
     pub fn new(
@@ -392,20 +426,78 @@ impl<T: IndexTag> Byteable for Content<T> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, SurrealValue)]
 pub struct Index<T: IndexTag> {
     hash: Hash, // Primary Key
     title: String,
     release_date: i32,
     source: PublicKey,
     signature: Signature,
-    _phantom: PhantomData<T>,
+    #[surreal(skip, default)]
+    _phantom: SurrealPhantom<T>,
 }
+
+impl Index<NoTag> {
+    pub fn make_tagged<T: IndexTag>(self) -> Index<T> {
+        // SAFETY: They're literally the same type, just different tags
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SurrealPhantom<T>(PhantomData<T>);
+
+impl<T> Default for SurrealPhantom<T> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
+impl<T> SurrealValue for SurrealPhantom<T> {
+    fn kind_of() -> surrealdb_types::Kind {
+        surrealdb_types::Kind::None
+    }
+
+    fn into_value(self) -> surrealdb_types::Value {
+        surrealdb_types::Value::None
+    }
+
+    fn from_value(value: surrealdb_types::Value) -> Result<Self, surrealdb::Error>
+    where
+        Self: Sized,
+    {
+        return Ok(SurrealPhantom(PhantomData));
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct NoTag;
+impl IndexTag for NoTag {
+    const TAG: &'static str = "";
+
+    const CONTENT_TABLE: &'static str = "";
+
+    type Content = ();
+}
+
+// impl<T: IndexTag, R: IndexTag> From<Index<T>> for Index<R> {
+//     fn from(index: Index<T>) -> Self {
+//         // SAFETY: They're literally the same type, just different tags
+//         unsafe { std::mem::transmute(index) }
+//     }
+// }
 
 pub trait IndexTag: Send + Clone + Debug {
     const TAG: &'static str; // Acts like table name
     const CONTENT_TABLE: &'static str;
-    type Content: Send + Serialize + for<'de> Deserialize<'de> + Clone + Debug + ToBytes + Byteable;
+    type Content: Send
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + Clone
+        + Debug
+        + ToBytes
+        + Byteable
+        + SurrealValue;
 }
 
 impl<T: IndexTag> Index<T> {
@@ -418,7 +510,7 @@ impl<T: IndexTag> Index<T> {
             release_date,
             source,
             signature,
-            _phantom: PhantomData,
+            _phantom: SurrealPhantom(PhantomData),
         }
     }
 
@@ -429,7 +521,7 @@ impl<T: IndexTag> Index<T> {
             release_date: self.release_date,
             source: self.source,
             signature: self.signature,
-            _phantom: PhantomData,
+            _phantom: SurrealPhantom(PhantomData),
         }
     }
 
@@ -453,6 +545,11 @@ impl<T: IndexTag> Index<T> {
         index.sign(priv_key);
 
         index
+    }
+
+    pub fn strip_tag(self) -> Index<NoTag> {
+        // SAFETY: They're literally the same type, just different tags
+        unsafe { std::mem::transmute(self) }
     }
 
     fn sign(&mut self, priv_key: &PrivateKey) {
@@ -506,52 +603,48 @@ impl<T: IndexTag> Byteable for Index<T> {
             release_date: i32::decode(reader).await?,
             source: PublicKey::decode(reader).await?,
             signature: Signature::decode(reader).await?,
-            _phantom: PhantomData,
+            _phantom: SurrealPhantom(PhantomData),
         })
     }
 }
 
-pub enum TaggedIndex {
-    Novel(Index<MangaTag>),
-}
+// impl TaggedIndex {
+//     pub fn verify(&self) -> bool {
+//         match self {
+//             TaggedIndex::Novel(index) => index.verify(),
+//         }
+//     }
+// }
 
-impl TaggedIndex {
-    pub fn verify(&self) -> bool {
-        match self {
-            TaggedIndex::Novel(index) => index.verify(),
-        }
-    }
-}
+// impl Byteable for TaggedIndex {
+//     async fn encode<W: AsyncWrite + Unpin + Send>(
+//         &self,
+//         writer: &mut W,
+//     ) -> Result<(), EncodeError> {
+//         match self {
+//             TaggedIndex::Novel(index) => {
+//                 MangaTag::TAG.to_string().encode(writer).await?;
+//                 index.encode(writer).await?;
+//             }
+//         }
 
-impl Byteable for TaggedIndex {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-    ) -> Result<(), EncodeError> {
-        match self {
-            TaggedIndex::Novel(index) => {
-                MangaTag::TAG.to_string().encode(writer).await?;
-                index.encode(writer).await?;
-            }
-        }
+//         Ok(())
+//     }
 
-        Ok(())
-    }
+//     async fn decode<R: AsyncRead + Unpin + Send>(reader: &mut R) -> Result<Self, DecodeError> {
+//         let tag = String::decode(reader).await?;
+//         match tag.as_str() {
+//             MangaTag::TAG => Ok(TaggedIndex::Novel(Index::decode(reader).await?)),
+//             _ => Err(DecodeError::InvalidEnumVariant {
+//                 variant_value: tag,
+//                 enum_name: stringify!(TaggedIndex),
+//             }),
+//         }
+//     }
+// }
 
-    async fn decode<R: AsyncRead + Unpin + Send>(reader: &mut R) -> Result<Self, DecodeError> {
-        let tag = String::decode(reader).await?;
-        match tag.as_str() {
-            MangaTag::TAG => Ok(TaggedIndex::Novel(Index::decode(reader).await?)),
-            _ => Err(DecodeError::InvalidEnumVariant {
-                variant_value: tag,
-                enum_name: stringify!(TaggedIndex),
-            }),
-        }
-    }
-}
-
-impl From<Index<MangaTag>> for TaggedIndex {
-    fn from(index: Index<MangaTag>) -> Self {
-        TaggedIndex::Novel(index)
-    }
-}
+// impl From<Index<MangaTag>> for TaggedIndex {
+//     fn from(index: Index<MangaTag>) -> Self {
+//         TaggedIndex::Novel(index)
+//     }
+// }

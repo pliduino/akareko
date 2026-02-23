@@ -136,24 +136,31 @@ impl ImageViewerView {
                                 }
                             }
 
-                            match output
+                            let _ = output
                                 .send(
                                     ImageViewerMessage::PreloadImages {
                                         total_images: file_count,
                                     }
                                     .into(),
                                 )
-                                .await
-                            {
-                                Ok(_) => {}
-                                Err(e) => {
-                                    error!("Error preloading images: {}", e);
-                                }
-                            }
+                                .await;
 
                             for (i, path) in paths.iter().enumerate() {
                                 let contents = tokio::fs::read(path).await.unwrap();
-                                let image = image::load_from_memory(&contents).unwrap().to_rgba8();
+                                let image = match image::load_from_memory(&contents) {
+                                    Ok(image) => image.to_rgb8(),
+                                    Err(e) => {
+                                        error!("Error loading image {}: {}", path.display(), e);
+                                        let _ = output
+                                            .send(Message::PostToast(Toast::error(
+                                                "Could not load image".into(),
+                                                format!("Error loading image: {}", e),
+                                            )))
+                                            .await;
+
+                                        continue;
+                                    }
+                                };
                                 let (width, height) = image.dimensions();
 
                                 match output
@@ -201,11 +208,27 @@ impl ImageViewerView {
 
                                 // Add priority system so files near the current page are loaded first
                                 for i in 0..total_images {
-                                    let mut f = zip.reader_without_entry(i).await.unwrap();
+                                    let mut f = zip.reader_with_entry(i).await.unwrap();
                                     let mut buffer = vec![];
                                     f.read_to_end(&mut buffer).await.unwrap();
-                                    let image =
-                                        image::load_from_memory(&buffer).unwrap().to_rgba8();
+                                    let image = match image::load_from_memory(&buffer) {
+                                        Ok(image) => image.to_rgba8(),
+                                        Err(e) => {
+                                            error!(
+                                                "Error loading image {}: {}",
+                                                f.entry().filename().as_str().unwrap(),
+                                                e
+                                            );
+                                            let _ = output
+                                                .send(Message::PostToast(Toast::error(
+                                                    "Could not load image".into(),
+                                                    format!("Error loading image: {}", e),
+                                                )))
+                                                .await;
+
+                                            continue;
+                                        }
+                                    };
                                     let (width, height) = image.dimensions();
 
                                     match output

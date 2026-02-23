@@ -1,12 +1,9 @@
 use serde::de::Error as DeError;
 use serde::{Deserialize, Deserializer, Serialize};
-use surrealdb::RecordId;
+use surrealdb::types::{Object, RecordId, SerializationError, SurrealValue};
 
 use crate::{
-    db::{
-        Index, IndexTag, Timestamp,
-        user::{User, deserialize_signature_id},
-    },
+    db::{Index, IndexTag, Timestamp, user::User},
     hash::{Hash, PublicKey, Signature},
 };
 
@@ -15,8 +12,14 @@ mod surreal;
 #[cfg(feature = "surrealdb")]
 pub use surreal::PostRepository;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, byteable_derive::Byteable)]
 pub struct Topic(#[serde(with = "serde_bytes")] [u8; 64]);
+
+impl AsRef<[u8]> for Topic {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
 
 impl Topic {
     pub fn from_index<I: IndexTag>(index: &Index<I>) -> Self {
@@ -38,25 +41,61 @@ impl Topic {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl SurrealValue for Topic {
+    fn kind_of() -> surrealdb::types::Kind {
+        surrealdb::types::Kind::Bytes
+    }
+
+    fn into_value(self) -> surrealdb::types::Value {
+        surrealdb::types::Value::Bytes(bytes::Bytes::from_owner(self).into())
+    }
+
+    fn from_value(value: surrealdb::types::Value) -> Result<Self, surrealdb::Error>
+    where
+        Self: Sized,
+    {
+        let bytes = match value.as_bytes() {
+            Some(b) => b,
+            None => {
+                return Err(surrealdb::Error::serialization(
+                    "Topic can only be made from bytes".to_string(),
+                    Some(SerializationError::Deserialization),
+                ));
+            }
+        };
+
+        if bytes.len() != 64 {
+            return Err(surrealdb::Error::serialization(
+                "Topic needs 64 bytes".to_string(),
+                Some(SerializationError::Deserialization),
+            ));
+        }
+
+        //TODO: zero copy
+        let b: &[u8] = bytes.as_ref();
+
+        Ok(Topic(b.try_into().unwrap()))
+    }
+}
+
+pub struct CachedSyncs {
+    pub topic: Topic,
+    pub source: PublicKey,
+    pub timestamp: Timestamp,
+}
+
+#[derive(Debug, Clone, SurrealValue, byteable_derive::Byteable)]
 pub struct Post {
-    #[cfg_attr(
-        feature = "surrealdb",
-        serde(
-            rename = "id",
-            deserialize_with = "deserialize_signature_id",
-            skip_serializing
-        )
-    )]
+    #[surreal(rename = "id")]
     pub signature: Signature,
 
-    #[cfg_attr(
-        feature = "surrealdb",
-        serde(
-            serialize_with = "serialize_pubkey_as_user_id",
-            deserialize_with = "deserialize_record_id_as_pubkey",
-        )
-    )]
+    // #[cfg_attr(
+    //     feature = "surrealdb",
+    //     serde(
+    //         serialize_with = "serialize_pubkey_as_user_id",
+    //         deserialize_with = "deserialize_record_id_as_pubkey",
+    //     )
+    // )]
     /// Who posted
     pub source: PublicKey,
 
@@ -64,26 +103,35 @@ pub struct Post {
 
     pub timestamp: Timestamp,
     pub content: String,
+
+    // Unsigned
+    pub received_at: Timestamp,
 }
 
-fn serialize_pubkey_as_user_id<S>(key: &PublicKey, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    let record_id = RecordId::from_table_key(User::TABLE_NAME, key.to_base64());
-    record_id.serialize(serializer)
+impl std::hash::Hash for Post {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.signature.hash(state);
+    }
 }
 
-fn deserialize_record_id_as_pubkey<'de, D>(deserializer: D) -> Result<PublicKey, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let id = RecordId::deserialize(deserializer)?;
-    let key = id.key().to_string();
-    let trimmed = key.trim_start_matches("`").trim_end_matches("`");
+// fn serialize_pubkey_as_user_id<S>(key: &PublicKey, serializer: S) -> Result<S::Ok, S::Error>
+// where
+//     S: serde::Serializer,
+// {
+//     let record_id = RecordId::from_table_key(User::TABLE_NAME, key.to_base64());
+//     record_id.serialize(serializer)
+// }
 
-    PublicKey::from_base64(&trimmed).map_err(serde::de::Error::custom)
-}
+// fn deserialize_record_id_as_pubkey<'de, D>(deserializer: D) -> Result<PublicKey, D::Error>
+// where
+//     D: serde::Deserializer<'de>,
+// {
+//     let id = RecordId::deserialize(deserializer)?;
+//     let key = id.key.into_value().as_string().unwrap();
+//     let trimmed = key.trim_start_matches("`").trim_end_matches("`");
+
+//     PublicKey::from_base64(&trimmed).map_err(serde::de::Error::custom)
+// }
 
 impl Post {
     const TABLE_NAME: &str = "posts";
@@ -91,6 +139,7 @@ impl Post {
     pub fn new(
         content: String,
         timestamp: Timestamp,
+        received_at: Timestamp,
         source: PublicKey,
         topic: Topic,
         signature: Signature,
@@ -101,18 +150,21 @@ impl Post {
             topic,
             timestamp,
             content,
+            received_at,
         }
     }
 
     pub fn new_signed(
         content: String,
         timestamp: Timestamp,
+        received_at: Timestamp,
         topic: Topic,
         priv_key: &crate::hash::PrivateKey,
     ) -> Self {
         let mut comment = Self::new(
             content,
             timestamp,
+            received_at,
             priv_key.public_key(),
             topic,
             Signature::empty(),

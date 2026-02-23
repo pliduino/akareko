@@ -21,21 +21,26 @@ pub struct Who;
 impl AuroraProtocolCommand for Who {
     type RequestPayload = WhoRequest;
     type ResponsePayload = WhoResponse;
+    type ResponseData = ();
 
     async fn process(
         req: Self::RequestPayload,
         state: &ServerState,
-    ) -> AuroraProtocolResponse<Self::ResponsePayload> {
+        address: &I2PAddress,
+    ) -> AuroraProtocolResponse<Self::ResponsePayload, Self::ResponseData> {
         let response: Option<WhoResponse> = {
             let config = state.config.read().await;
             let user_pub_key = config.public_key();
             let priv_key = config.private_key();
-            match state.repositories.user().await.get_user(user_pub_key).await {
-                Some(user) => Some(WhoResponse::new_signed(
-                    user,
-                    &req.request_address,
-                    priv_key,
-                )),
+            match state
+                .repositories
+                .user()
+                .await
+                .get_user(user_pub_key)
+                .await
+                .unwrap()
+            {
+                Some(user) => Some(WhoResponse::new_signed(user, &address, priv_key)),
                 None => None,
             }
         };
@@ -49,9 +54,7 @@ impl AuroraProtocolCommand for Who {
 }
 
 #[derive(Debug, byteable_derive::Byteable)]
-pub struct WhoRequest {
-    pub request_address: I2PAddress,
-}
+pub struct WhoRequest {}
 
 #[derive(Debug, byteable_derive::Byteable)]
 pub struct WhoResponse {
@@ -63,7 +66,7 @@ pub struct WhoResponse {
 impl WhoResponse {
     pub fn verification_bytes(&self, request_address: &I2PAddress) -> Vec<u8> {
         let mut bytes = self.timestamp.to_le_bytes().to_vec();
-        bytes.extend(request_address.inner().as_bytes());
+        bytes.extend(request_address.to_string().as_bytes());
         bytes
     }
 

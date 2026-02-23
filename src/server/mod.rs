@@ -7,7 +7,10 @@ use yosemite::{Session, SessionOptions, style};
 
 use crate::{
     config::AuroraConfig,
-    db::{Repositories, user::UserRepository},
+    db::{
+        Repositories,
+        user::{I2PAddress, UserRepository},
+    },
     errors::{DecodeError, IoError, ServerError},
     helpers::{Byteable, b32_from_pub_b64},
     server::protocol::AuroraProtocolVersion,
@@ -81,7 +84,7 @@ impl AuroraServer {
         while let Ok(mut stream) = sam_session.accept().await {
             let state = state.clone();
             tokio::spawn(async move {
-                let address = stream.remote_destination();
+                let address = I2PAddress::new(stream.remote_destination());
 
                 // state.repositories.user().get_user(address);
 
@@ -109,7 +112,7 @@ impl AuroraServer {
 
                     match version {
                         AuroraProtocolVersion::V1 => {
-                            handler::V1::handle(&mut stream, &state).await;
+                            handler::V1::handle(&mut stream, &state, &address).await;
                         }
                     }
                 }

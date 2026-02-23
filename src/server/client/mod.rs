@@ -14,8 +14,8 @@ use yosemite::{Session, SessionOptions, Stream, style};
 use crate::{
     config::AuroraConfig,
     db::{
-        Content, Index, IndexTag, Repositories, TaggedIndex,
-        index::{MangaTag, TaggedContent},
+        Content, Index, IndexTag, Repositories,
+        index::{IndexRepository, MangaTag, TaggedContent},
         user::{I2PAddress, TrustLevel, User, UserRepository},
     },
     errors::ClientError,
@@ -81,16 +81,13 @@ impl AuroraClient {
     pub async fn get_all_indexes<T: IndexTag>(
         &mut self,
         url: &I2PAddress,
-    ) -> Result<Vec<Index<T>>, ClientError> {
+        db: IndexRepository<'_>,
+    ) -> Result<(), ClientError> {
         let mut stream = self.get_stream(url).await?;
 
-        let res = handler::index::GetAllIndexes::request(
-            GetAllIndexesRequest {
-                tag: T::TAG.to_string(),
-            },
-            &mut stream,
-        )
-        .await?;
+        let mut res =
+            handler::index::GetAllIndexes::request(GetAllIndexesRequest::new::<T>(), &mut stream)
+                .await?;
 
         if !res.status().is_ok() {
             return Err(ClientError::UnexpectedResponseCode {
@@ -98,125 +95,18 @@ impl AuroraClient {
             });
         }
 
-        let Some(payload) = res.payload() else {
-            return Err(ClientError::MissingPayload);
-        };
+        while let Ok(Some(index)) = res.data().next(&mut stream).await {
+            let index: Index<T> = index.make_tagged();
 
-        let mut indexes: Vec<Index<T>> = Vec::with_capacity(payload.indexes.len());
-
-        for index in payload.indexes {
             if !index.verify() {
                 error!("Invalid index signature");
                 continue;
             }
-            match index {
-                TaggedIndex::Novel(index) => {
-                    if T::TAG == MangaTag::TAG {
-                        indexes.push(index.transmute());
-                    }
-                }
-            }
-        }
 
-        Ok(indexes)
-    }
-
-    // ╔===========================================================================╗
-    // ║                                 Exchange                                  ║
-    // ╚===========================================================================╝
-
-    pub async fn routine_exchange(&mut self, url: &I2PAddress) -> Result<(), ClientError> {
-        let mut stream = self.get_stream(url).await?;
-
-        let who = self.who_internal(&mut stream).await?;
-
-        self.repositories.user().await.upsert_user(who).await?;
-
-        let response = handler::index::ExchangeContent::request(
-            ExchangeContentRequest { count: 10 },
-            &mut stream,
-        )
-        .await?;
-
-        let contents = response.payload_if_ok()?.contents;
-
-        let mut existing_indexes: HashSet<Hash> = HashSet::new();
-        let mut missing_indexes: Vec<(String, Hash)> = Vec::new();
-
-        for content in contents.iter() {
-            match content {
-                TaggedContent::Manga(content) => {
-                    match self
-                        .repositories
-                        .index()
-                        .await
-                        .get_index::<MangaTag>(content.index_hash())
-                        .await
-                    {
-                        Ok(i) => match i {
-                            Some(_) => {
-                                existing_indexes.insert(content.index_hash().clone());
-                            }
-                            None => {
-                                missing_indexes.push((
-                                    MangaTag::TAG.to_string(),
-                                    content.index_hash().clone(),
-                                ));
-                            }
-                        },
-                        Err(e) => {
-                            error!("Failed to get index: {}", e);
-                        }
-                    }
-                }
-            }
-        }
-
-        let response = handler::index::GetIndexes::request(
-            GetIndexesRequest {
-                indexes: missing_indexes,
-            },
-            &mut stream,
-        )
-        .await?
-        .payload_if_ok()?;
-
-        for index in response.indexes {
-            if !index.verify() {
-                error!("Invalid index signature");
-                continue;
-            }
-            match index {
-                TaggedIndex::Novel(index) => {
-                    match self.repositories.index().await.add_index(index).await {
-                        Ok(i) => {
-                            existing_indexes.insert(i.hash().clone());
-                        }
-                        Err(e) => {
-                            error!("Failed to add index: {}", e);
-                        }
-                    }
-                }
-            }
-        }
-
-        for content in contents.into_iter() {
-            if !existing_indexes.contains(content.index_hash()) {
-                continue;
-            }
-
-            if !content.verify() {
-                error!("Invalid content signature");
-                continue;
-            }
-            match content {
-                TaggedContent::Manga(content) => {
-                    match self.repositories.index().await.add_content(content).await {
-                        Ok(_) => {}
-                        Err(e) => {
-                            error!("Failed to add content: {}", e);
-                        }
-                    }
+            match db.add_index(index).await {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("Failed to add index: {}", e);
                 }
             }
         }
@@ -225,18 +115,116 @@ impl AuroraClient {
     }
 
     // ╔===========================================================================╗
+    // ║                                 Exchange                                  ║
+    // ╚===========================================================================╝
+
+    // pub async fn routine_exchange(&mut self, url: &I2PAddress) -> Result<(), ClientError> {
+    //     let mut stream = self.get_stream(url).await?;
+
+    //     let who = self.who_internal(&mut stream).await?;
+
+    //     self.repositories.user().await.upsert_user(who).await?;
+
+    //     let response = handler::index::ExchangeContent::request(
+    //         ExchangeContentRequest { count: 10 },
+    //         &mut stream,
+    //     )
+    //     .await?;
+
+    //     let contents = response.payload_if_ok()?.contents;
+
+    //     let mut existing_indexes: HashSet<Hash> = HashSet::new();
+    //     let mut missing_indexes: Vec<Hash> = Vec::new();
+
+    //     for content in contents.iter() {
+    //         match content {
+    //             TaggedContent::Manga(content) => {
+    //                 match self
+    //                     .repositories
+    //                     .index()
+    //                     .await
+    //                     .get_index::<MangaTag>(content.index_hash())
+    //                     .await
+    //                 {
+    //                     Ok(i) => match i {
+    //                         Some(_) => {
+    //                             existing_indexes.insert(content.index_hash().clone());
+    //                         }
+    //                         None => {
+    //                             missing_indexes.push(content.index_hash().clone());
+    //                         }
+    //                     },
+    //                     Err(e) => {
+    //                         error!("Failed to get index: {}", e);
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+
+    //     let mut response = handler::index::GetIndexes::request(
+    //         GetIndexesRequest::new(missing_indexes),
+    //         &mut stream,
+    //     )
+    //     .await?;
+
+    //     if !response.status().is_ok() {
+    //         return Err(ClientError::UnexpectedResponseCode {
+    //             status: response.status().clone(),
+    //         });
+    //     }
+
+    //     while let Ok(Some(index)) = response.data().next(&mut stream).await {
+    //         let index: Index<T> = index.make_tagged();
+
+    //         if !index.verify() {
+    //             error!("Invalid index signature");
+    //             continue;
+    //         }
+
+    //         match index {
+    //             self.repositories.index().await.add_index(index).await {
+    //                 Ok(i) => {
+    //                     existing_indexes.insert(i.hash().clone());
+    //                 }
+    //                 Err(e) => {
+    //                     error!("Failed to add index: {}", e);
+    //                 }
+    //             }
+    //         }
+    //     }
+
+    //     for content in contents.into_iter() {
+    //         if !existing_indexes.contains(content.index_hash()) {
+    //             continue;
+    //         }
+
+    //         if !content.verify() {
+    //             error!("Invalid content signature");
+    //             continue;
+    //         }
+    //         match content {
+    //             TaggedContent::Manga(content) => {
+    //                 match self.repositories.index().await.add_content(content).await {
+    //                     Ok(_) => {}
+    //                     Err(e) => {
+    //                         error!("Failed to add content: {}", e);
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+
+    //     Ok(())
+    // }
+
+    // ╔===========================================================================╗
     // ║                                   User                                    ║
     // ╚===========================================================================╝
 
     /// Who function without creating a new stream
     async fn who_internal(&self, stream: &mut LoggingStream<Stream>) -> Result<User, ClientError> {
-        let res = handler::users::Who::request(
-            WhoRequest {
-                request_address: self.host_address.clone(),
-            },
-            stream,
-        )
-        .await?;
+        let res = handler::users::Who::request(WhoRequest {}, stream).await?;
 
         if !res.status().is_ok() {
             return Err(ClientError::UnexpectedResponseCode {

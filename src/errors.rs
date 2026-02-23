@@ -48,6 +48,7 @@ error_set::error_set! {
             || DecodeError || YosemiteError || InvalidSignature || DatabaseError
 
     EncodeError := {
+        InvalidData,
         TooManyElements {
             allowed: usize,
             actual: usize

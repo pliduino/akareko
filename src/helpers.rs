@@ -4,6 +4,7 @@ use base64::{Engine, prelude::BASE64_STANDARD};
 use data_encoding::BASE32_NOPAD;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use surrealdb_types::SurrealValue;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use unicode_normalization::UnicodeNormalization;
 
@@ -12,6 +13,7 @@ use crate::{
     errors::{DecodeError, I2PParseError},
 };
 
+mod bloom_filter;
 mod byteable;
 pub use byteable::Byteable;
 
@@ -44,7 +46,7 @@ impl SanitizedString {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, byteable_derive::Byteable)]
+#[derive(Debug, Clone, Serialize, Deserialize, SurrealValue, byteable_derive::Byteable)]
 #[repr(u16)]
 pub enum Language {
     Japanese,

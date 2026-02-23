@@ -52,7 +52,7 @@ macro_rules! handler {
             )*
 
             impl $version {
-                pub async fn handle<S: AsyncRead + AsyncWrite + Unpin + Send>(stream: &mut S, state: &ServerState) {
+                pub async fn handle<S: AsyncRead + AsyncWrite + Unpin + Send>(stream: &mut S, state: &ServerState, address: &I2PAddress) {
                     let command = [<AuroraProtocolCommandCategory $version>]::decode(stream)
                         .await
                         .unwrap();
@@ -67,7 +67,7 @@ macro_rules! handler {
                                 match command {
                                     $(
                                         [<$category Command $version>]::$command => {
-                                            <$handler as AuroraProtocolCommandHandler>::handle(stream, state).await;
+                                            <$handler as AuroraProtocolCommandHandler>::handle(stream, state, address).await;
                                         }
                                     )*
                                 }

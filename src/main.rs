@@ -22,7 +22,6 @@ mod db;
 mod errors;
 mod hash;
 mod helpers;
-mod models;
 mod server;
 mod ui;
 

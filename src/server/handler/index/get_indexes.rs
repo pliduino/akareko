@@ -1,7 +1,8 @@
 use crate::{
     db::{
-        IndexTag, Repositories, TaggedIndex,
+        Index, IndexTag, NoTag, Repositories,
         index::{IndexRepository, MangaTag},
+        user::I2PAddress,
     },
     hash::Hash,
     server::{ServerState, handler::AuroraProtocolCommand, protocol::AuroraProtocolResponse},
@@ -12,50 +13,52 @@ pub struct GetIndexes;
 impl AuroraProtocolCommand for GetIndexes {
     type RequestPayload = GetIndexesRequest;
     type ResponsePayload = GetIndexesResponse;
+    type ResponseData = Index<NoTag>;
 
     async fn process(
         req: Self::RequestPayload,
         state: &ServerState,
-    ) -> AuroraProtocolResponse<Self::ResponsePayload> {
-        let mut handles = Vec::with_capacity(req.indexes.len());
-        for (s, hash) in req.indexes {
-            let repo = state.repositories.clone();
-            let handle = tokio::spawn(async move {
-                match s.as_str() {
-                    MangaTag::TAG => {
-                        let novel_repo = repo.index().await;
-                        match novel_repo.get_index(&hash).await {
-                            Ok(index) => match index {
-                                Some(i) => Some(i.into()),
-                                None => None,
-                            },
-                            Err(_) => return None,
-                        }
+        address: &I2PAddress,
+    ) -> AuroraProtocolResponse<Self::ResponsePayload, Self::ResponseData> {
+        match req.tag.as_str() {
+            MangaTag::TAG => {
+                let indexes = match state
+                    .repositories
+                    .index()
+                    .await
+                    .get_indexes::<MangaTag>(&req.indexes)
+                    .await
+                {
+                    Ok(i) => i,
+                    Err(_) => {
+                        return AuroraProtocolResponse::internal_error(format!("Database error"));
                     }
-                    _ => None,
-                }
-            });
-            handles.push(handle);
-        }
+                };
 
-        let mut indexes = Vec::with_capacity(handles.len());
-        for handle in handles {
-            match handle.await {
-                Ok(Some(index)) => indexes.push(index),
-                _ => {}
+                // SAFETY: They are all the same type, just different tags
+                AuroraProtocolResponse::ok_with_data(GetIndexesResponse {}, unsafe {
+                    std::mem::transmute(indexes)
+                })
             }
+            _ => AuroraProtocolResponse::invalid_argument(format!("Invalid tag: {}", req.tag)),
         }
-
-        AuroraProtocolResponse::ok(GetIndexesResponse { indexes })
     }
 }
 
 #[derive(byteable_derive::Byteable)]
 pub struct GetIndexesRequest {
-    pub indexes: Vec<(String, Hash)>,
+    tag: String,
+    indexes: Vec<Hash>,
+}
+
+impl GetIndexesRequest {
+    pub fn new<T: IndexTag>(indexes: Vec<Hash>) -> Self {
+        Self {
+            tag: T::TAG.to_string(),
+            indexes,
+        }
+    }
 }
 
 #[derive(byteable_derive::Byteable)]
-pub struct GetIndexesResponse {
-    pub indexes: Vec<TaggedIndex>,
-}
+pub struct GetIndexesResponse {}

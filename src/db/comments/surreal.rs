@@ -1,9 +1,11 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, LinkedList};
 
 use const_format::formatcp;
-use serde::Deserialize;
-use surrealdb::{Surreal, engine::local::Db};
+use fastbloom::BloomFilter;
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use surrealdb::{Notification, Surreal, engine::local::Db, types::SurrealValue};
 use tracing::info;
+use xorf::{BinaryFuse16, BinaryFuse32, Filter};
 
 use crate::{
     db::{
@@ -78,29 +80,47 @@ impl<'a> PostRepository<'a> {
             ",
             Post::TABLE_NAME
         );
+        todo!()
 
-        #[derive(Deserialize)]
-        struct Response {
-            total: usize,
-            data: Vec<Post>,
-            users: HashSet<User>,
-        }
+        // #[derive(SurrealValue)]
+        // struct Response {
+        //     total: usize,
+        //     data: Vec<Post>,
+        //     users: HashSet<User>,
+        // }
 
-        let result: Option<Response> = self
-            .db
-            .query(QUERY)
-            .bind(("topic", topic))
-            .bind(("take", take))
-            .bind(("skip", skip))
-            .await?
-            .take(3)?;
+        // let result: Option<Response> = self
+        //     .db
+        //     .query(QUERY)
+        //     .bind(("topic", topic))
+        //     .bind(("take", take))
+        //     .bind(("skip", skip))
+        //     .await?
+        //     .take(3)?;
 
-        match result {
-            Some(r) => Ok(PaginateResponse {
-                values: (r.data, r.users),
-                total: r.total,
-            }),
-            None => Err(DatabaseError::Unknown),
-        }
+        // match result {
+        //     Some(r) => Ok(PaginateResponse {
+        //         values: (r.data, r.users),
+        //         total: r.total,
+        //     }),
+        //     None => Err(DatabaseError::Unknown),
+        // }
+    }
+
+    pub async fn get_all_posts_by_topic(
+        &self,
+        topic: Topic,
+        filter: &BloomFilter,
+    ) -> Result<Vec<Post>, DatabaseError> {
+        const QUERY: &'static str = formatcp!(
+            "
+                SELECT * FROM {0} WHERE topic = $topic;
+            ",
+            Post::TABLE_NAME
+        );
+
+        let result: Vec<Post> = self.db.query(QUERY).bind(("topic", topic)).await?.take(0)?;
+
+        Ok(result)
     }
 }

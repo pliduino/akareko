@@ -44,6 +44,7 @@
 
           buildInputs = with pkgs; [
             openssl
+            sqlite
           ];
 
           nativeBuildInputs = with pkgs; [

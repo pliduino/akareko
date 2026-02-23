@@ -1,5 +1,5 @@
 use rand::seq::{IteratorRandom, SliceRandom};
-use surrealdb::{RecordId, Surreal, engine::local::Db};
+use surrealdb::{Surreal, engine::local::Db, types::RecordId};
 use tracing::info;
 
 use crate::{errors::DatabaseError, hash::PublicKey};
@@ -18,13 +18,9 @@ impl<'a> UserRepository<'a> {
 
 impl<'a> UserRepository<'a> {
     pub async fn upsert_user(&self, user: User) -> Result<User, DatabaseError> {
-        let result: Option<User> = self
-            .db
-            .upsert((User::TABLE_NAME, user.pub_key().to_base64()))
-            .content(user)
-            .await?;
+        let result: Vec<User> = self.db.upsert(User::TABLE_NAME).content(user).await?;
 
-        match result {
+        match result.into_iter().next() {
             Some(user) => {
                 info!("Created user: {}", user.name());
                 Ok(user)
@@ -38,8 +34,8 @@ impl<'a> UserRepository<'a> {
         pub_keys_base64: Vec<String>,
     ) -> Result<Vec<User>, DatabaseError> {
         let ids: Vec<RecordId> = pub_keys_base64
-            .iter()
-            .map(|p| RecordId::from(("users", p)))
+            .into_iter()
+            .map(|p| RecordId::new(User::TABLE_NAME, p))
             .collect();
 
         let results: Vec<User> = self
@@ -55,7 +51,7 @@ impl<'a> UserRepository<'a> {
     pub async fn get_users(&self, pub_keys: Vec<PublicKey>) -> Result<Vec<User>, DatabaseError> {
         let ids: Vec<RecordId> = pub_keys
             .iter()
-            .map(|p| RecordId::from(("users", p.to_base64())))
+            .map(|p| RecordId::new(User::TABLE_NAME, p.to_base64()))
             .collect();
 
         let results: Vec<User> = self
@@ -79,13 +75,9 @@ impl<'a> UserRepository<'a> {
         results
     }
 
-    pub async fn get_user(&self, pub_key: &PublicKey) -> Option<User> {
-        let results: Option<User> = self
-            .db
-            .select(("users", pub_key.to_base64()))
-            .await
-            .unwrap();
+    pub async fn get_user(&self, pub_key: &PublicKey) -> Result<Option<User>, DatabaseError> {
+        let results: Option<User> = self.db.select(("users", pub_key.to_base64())).await?;
 
-        results
+        Ok(results)
     }
 }

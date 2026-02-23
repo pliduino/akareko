@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 
 use serde::{Deserialize, Deserializer, Serialize};
-use surrealdb::RecordId;
+use surrealdb::types::{RecordId, SurrealValue};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::{
@@ -19,10 +19,10 @@ mod surreal;
 #[cfg(feature = "surrealdb")]
 pub use surreal::UserRepository;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, SurrealValue, Hash, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TrustLevel {
-    Ignore,     // Been proven to falsify data, also used for your own user
+    Ignore,     // Also used for your own user
     Unverified, // Default for users we haven't verified the address
     Untrusted,  // Default for users we have verified the address
     Trusted,
@@ -52,7 +52,17 @@ impl Display for TrustLevel {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq, byteable_derive::Byteable)]
+#[derive(
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    Hash,
+    PartialEq,
+    SurrealValue,
+    Eq,
+    byteable_derive::Byteable,
+)]
 pub struct I2PAddress(String);
 
 impl I2PAddress {
@@ -85,16 +95,9 @@ impl Display for I2PAddress {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, SurrealValue)]
 pub struct User {
-    #[cfg_attr(
-        feature = "surrealdb",
-        serde(
-            rename = "id",
-            deserialize_with = "deserialize_pubkey_id",
-            skip_serializing
-        )
-    )]
+    #[surreal(rename = "id")]
     pub_key: PublicKey,
     name: String,
     timestamp: Timestamp,
@@ -109,29 +112,30 @@ pub struct User {
 }
 
 // Convert "<table>:<base64>" -> PublicKey
-pub fn deserialize_pubkey_id<'de, D>(deserializer: D) -> Result<PublicKey, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let id = RecordId::deserialize(deserializer)?;
-    let key = id.key().to_string();
-    let trimmed = key.trim_start_matches("`").trim_end_matches("`");
+// pub fn deserialize_pubkey_id<'de, D>(deserializer: D) -> Result<PublicKey, D::Error>
+// where
+//     D: Deserializer<'de>,
+// {
+//     let id = RecordId::deserialize(deserializer)?;
+//     let key = id.key.into_value().as_string().unwrap();
+//     dbg!(&key);
+//     let trimmed = key.trim_start_matches("`").trim_end_matches("`");
 
-    PublicKey::from_base64(&trimmed)
-        .map_err(|e| serde::de::Error::custom(format!("Invalid public key: {}", e)))
-}
+//     PublicKey::from_base64(&trimmed)
+//         .map_err(|e| serde::de::Error::custom(format!("Invalid public key: {}", e)))
+// }
 
-pub fn deserialize_signature_id<'de, D>(deserializer: D) -> Result<Signature, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let id = RecordId::deserialize(deserializer)?;
-    let key = id.key().to_string();
-    let trimmed = key.trim_start_matches("`").trim_end_matches("`");
+// pub fn deserialize_signature_id<'de, D>(deserializer: D) -> Result<Signature, D::Error>
+// where
+//     D: Deserializer<'de>,
+// {
+//     let id = RecordId::deserialize(deserializer)?;
+//     let key = id.key.into_value().as_string().unwrap();
+//     let trimmed = key.trim_start_matches("`").trim_end_matches("`");
 
-    Signature::from_base64(&trimmed)
-        .map_err(|e| serde::de::Error::custom(format!("Invalid signature: {}", e)))
-}
+//     Signature::from_base64(&trimmed)
+//         .map_err(|e| serde::de::Error::custom(format!("Invalid signature: {}", e)))
+// }
 
 impl std::hash::Hash for User {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

@@ -20,5 +20,18 @@ Automatically save torrents periodically and on exit
 Hide/Highlight Tags
 
 Bookmarks/Bookmark Folders/Notifications
+Actively search for data on bookmarked content
 
 Change the way we store magnets
+
+Ratings (Stored only in relays)
+
+Trust system
+
+Sort content entries by enumeration
+Add algo for next entry while reading
+    - If multiple entries for the same enum are found prioritize the same uploader
+
+Post diffing
+    - Check last sync with peer and only ask for later received_at entries
+    - Send an Bloom filter of everything after the last sync

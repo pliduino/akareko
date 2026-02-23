@@ -1,5 +1,5 @@
 use crate::{
-    db::{Repositories, user::UserRepository},
+    db::user::I2PAddress,
     hash::PublicKey,
     server::{
         ServerState,
@@ -13,11 +13,13 @@ pub struct GetUsers;
 impl AuroraProtocolCommand for GetUsers {
     type RequestPayload = GetUsersRequest;
     type ResponsePayload = GetUsersResponse;
+    type ResponseData = ();
 
     async fn process(
         req: Self::RequestPayload,
         state: &ServerState,
-    ) -> AuroraProtocolResponse<Self::ResponsePayload> {
+        address: &I2PAddress,
+    ) -> AuroraProtocolResponse<Self::ResponsePayload, Self::ResponseData> {
         let users = match state
             .repositories
             .user()

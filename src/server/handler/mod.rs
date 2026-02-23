@@ -1,7 +1,7 @@
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::{
-    db::Repositories,
+    db::{NoTag, user::I2PAddress},
     errors::{ClientError, DecodeError, EncodeError},
     helpers::Byteable,
     server::{
@@ -12,6 +12,10 @@ use crate::{
 
 pub mod index;
 mod macros;
+pub mod post {
+    mod get_posts_by_topic;
+    pub use get_posts_by_topic::GetPostsByTopic;
+}
 pub mod users;
 
 /// Marker implemented by the handler macro
@@ -24,32 +28,45 @@ pub trait CommandCategoryEnum: Byteable {}
 pub(super) trait AuroraProtocolCommand: Sized + AuroraProtocolCommandMetadata {
     type RequestPayload: Byteable;
     type ResponsePayload: Byteable;
+    type ResponseData: Byteable;
 
     // Used by the client
     async fn request<S: AsyncRead + AsyncWrite + Unpin + Send>(
         payload: Self::RequestPayload,
         stream: &mut S,
-    ) -> Result<AuroraProtocolResponse<Self::ResponsePayload>, ClientError> {
+    ) -> Result<AuroraProtocolResponse<Self::ResponsePayload, Self::ResponseData>, ClientError>
+    {
         let req = AuroraProtocolRequest::<Self> { payload };
         req.encode(stream).await?;
-        let res = AuroraProtocolResponse::decode(stream).await?;
+        let res =
+            AuroraProtocolResponse::<Self::ResponsePayload, Self::ResponseData>::decode(stream)
+                .await?;
         Ok(res)
     }
 
     async fn process(
         req: Self::RequestPayload,
         state: &ServerState,
-    ) -> AuroraProtocolResponse<Self::ResponsePayload>;
+        address: &I2PAddress,
+    ) -> AuroraProtocolResponse<Self::ResponsePayload, Self::ResponseData>;
 }
 
 trait AuroraProtocolCommandHandler {
-    async fn handle<S: AsyncRead + AsyncWrite + Unpin + Send>(stream: &mut S, state: &ServerState);
+    async fn handle<S: AsyncRead + AsyncWrite + Unpin + Send>(
+        stream: &mut S,
+        state: &ServerState,
+        address: &I2PAddress,
+    );
 }
 
 impl<T: AuroraProtocolCommand> AuroraProtocolCommandHandler for T {
-    async fn handle<S: AsyncRead + AsyncWrite + Unpin + Send>(stream: &mut S, state: &ServerState) {
+    async fn handle<S: AsyncRead + AsyncWrite + Unpin + Send>(
+        stream: &mut S,
+        state: &ServerState,
+        address: &I2PAddress,
+    ) {
         let req = T::RequestPayload::decode(stream).await.unwrap();
-        let res = T::process(req, state).await;
+        let res = T::process(req, state, address).await;
         res.encode(stream).await.unwrap();
     }
 }
@@ -84,4 +101,7 @@ crate::handler!(V1, AuroraProtocolVersion::V1, {
         ExchangeContent(1) => index::ExchangeContent,
         GetIndexes(2) => index::GetIndexes
     },
+    Posts(2) => {
+        GetPostsByTopic(0) => post::GetPostsByTopic
+    }
 });

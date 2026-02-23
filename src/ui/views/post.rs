@@ -131,9 +131,11 @@ impl PostView {
                 PostMessage::AddPost => {
                     if let Some(repositories) = &state.repositories {
                         let repositories = repositories.clone();
+                        let now = now_timestamp();
                         let post = Post::new_signed(
                             v.content.text(),
-                            now_timestamp(),
+                            now,
+                            now,
                             v.topic.clone(),
                             state.config.private_key(),
                         );

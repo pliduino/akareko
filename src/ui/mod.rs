@@ -300,45 +300,45 @@ impl AppState {
                 .map(|_| Message::Nothing);
             }
             Exchange => {
-                if self.exchanging {
-                    return Task::none();
-                }
+                // if self.exchanging {
+                //     return Task::none();
+                // }
 
-                let Some(mut client) = self.client.clone() else {
-                    return Task::none();
-                };
+                // let Some(mut client) = self.client.clone() else {
+                //     return Task::none();
+                // };
 
-                let repository = match &self.repositories {
-                    Some(r) => r.clone(),
-                    None => return Task::none(),
-                };
+                // let repository = match &self.repositories {
+                //     Some(r) => r.clone(),
+                //     None => return Task::none(),
+                // };
 
-                self.exchanging = true;
+                // self.exchanging = true;
 
-                let self_key = self.config.public_key().clone();
+                // let self_key = self.config.public_key().clone();
 
-                return Task::future(async move {
-                    let Ok(user) = repository.user().await.get_random_user().await else {
-                        error!("Failed to get random user");
-                        return Message::FinishExchange;
-                    };
+                // return Task::future(async move {
+                //     let Ok(user) = repository.user().await.get_random_user().await else {
+                //         error!("Failed to get random user");
+                //         return Message::FinishExchange;
+                //     };
 
-                    if user.pub_key() == &self_key {
-                        //TODO: remove this later and move duty to get_random_user
-                        error!("Cannot exchange with self");
-                        return Message::FinishExchange;
-                    }
+                //     if user.pub_key() == &self_key {
+                //         //TODO: remove this later and move duty to get_random_user
+                //         error!("Cannot exchange with self");
+                //         return Message::FinishExchange;
+                //     }
 
-                    info!("Exchanging with {}", user.address());
-                    match client.routine_exchange(user.address()).await {
-                        Ok(()) => {}
-                        Err(e) => {
-                            error!("Failed to exchange: {}", e);
-                        }
-                    }
+                //     info!("Exchanging with {}", user.address());
+                //     match client.routine_exchange(user.address()).await {
+                //         Ok(()) => {}
+                //         Err(e) => {
+                //             error!("Failed to exchange: {}", e);
+                //         }
+                //     }
 
-                    Message::FinishExchange
-                });
+                //     Message::FinishExchange
+                // });
             }
             FinishExchange => {
                 self.exchanging = false;

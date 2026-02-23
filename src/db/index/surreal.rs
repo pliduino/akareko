@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
-use const_format::formatcp;
 use serde::{Deserialize, Serialize};
-use surrealdb::{RecordId, Surreal, engine::local::Db};
+use surrealdb::{Surreal, engine::local::Db, types::RecordId};
+use surrealdb_types::SurrealValue;
 use tracing::info;
 
 use crate::{
@@ -10,60 +10,6 @@ use crate::{
     errors::DatabaseError,
     hash::{Hash, PublicKey, Signature},
 };
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct IndexSurrealDb {
-    id: surrealdb::RecordId,
-    title: String,
-    release_date: i32,
-    source: PublicKey,
-    signature: Signature,
-}
-
-impl<T: IndexTag> From<Index<T>> for IndexSurrealDb {
-    fn from(index: Index<T>) -> Self {
-        let Index {
-            hash,
-            title,
-            release_date,
-            source,
-            signature,
-            ..
-        } = index;
-
-        Self {
-            id: RecordId::from_table_key(T::TAG.to_string(), hash.as_base64()),
-            title,
-            release_date,
-            source,
-            signature,
-        }
-    }
-}
-
-impl<T: IndexTag> Into<Index<T>> for IndexSurrealDb {
-    fn into(self) -> Index<T> {
-        let IndexSurrealDb {
-            id,
-            title,
-            release_date,
-            source,
-            signature,
-        } = self;
-
-        let key = &id.key().to_string();
-        let trimmed = key.trim_start_matches("`").trim_end_matches("`");
-
-        Index {
-            hash: Hash::from_base64(trimmed).unwrap(),
-            title,
-            release_date,
-            source,
-            signature,
-            _phantom: PhantomData,
-        }
-    }
-}
 
 pub struct IndexRepository<'a> {
     db: &'a Surreal<Db>,
@@ -77,20 +23,11 @@ impl<'a> IndexRepository<'a> {
 
 impl<'a> IndexRepository<'a> {
     pub async fn add_index<T: IndexTag>(&self, index: Index<T>) -> Result<Index<T>, DatabaseError> {
-        let index: IndexSurrealDb = index.into();
+        let created: Vec<Index<T>> = self.db.upsert(T::TAG).content(index).await?;
 
-        let created: Result<Option<IndexSurrealDb>, surrealdb::Error> =
-            self.db.upsert(index.id.clone()).content(index).await;
-
-        match created {
-            Ok(i) => match i {
-                Some(i) => {
-                    // info!("Created {}: {}", i.tag(), i.title());
-                    Ok(i.into())
-                }
-                None => Err(DatabaseError::Unknown),
-            },
-            Err(_) => Err(DatabaseError::Unknown),
+        match created.len() {
+            1 => Ok(created.into_iter().next().unwrap()),
+            _ => Err(DatabaseError::Unknown),
         }
     }
 
@@ -116,17 +53,37 @@ impl<'a> IndexRepository<'a> {
         }
     }
 
-    pub async fn get_indexes<T: IndexTag>(&self) -> Vec<Index<T>> {
-        let results: Vec<IndexSurrealDb> = self.db.select(T::TAG).await.unwrap();
-        results.into_iter().map(|i| i.into()).collect()
+    pub async fn get_all_indexes<T: IndexTag>(&self) -> Result<Vec<Index<T>>, DatabaseError> {
+        let results: Vec<Index<T>> = self.db.select(T::TAG).await?;
+
+        Ok(results)
+    }
+
+    pub async fn get_indexes<T: IndexTag>(
+        &self,
+        hashes: &[Hash],
+    ) -> Result<Vec<Index<T>>, DatabaseError> {
+        let ids: Vec<RecordId> = hashes
+            .iter()
+            .map(|h| RecordId::new(T::TAG, h.as_base64()))
+            .collect();
+
+        let results: Vec<Index<T>> = self
+            .db
+            .query("SELECT * FROM $ids")
+            .bind(("ids", ids))
+            .await?
+            .take(0)?;
+
+        Ok(results)
     }
 
     pub async fn get_index<T: IndexTag>(
         &self,
         hash: &Hash,
     ) -> Result<Option<Index<T>>, DatabaseError> {
-        let result: Option<IndexSurrealDb> = self.db.select((T::TAG, hash.as_base64())).await?;
-        Ok(result.map(|i| i.into()))
+        let result: Option<Index<T>> = self.db.select((T::TAG, hash.as_base64())).await?;
+        Ok(result)
     }
 
     pub async fn get_contents<T: IndexTag>(&self, index_hash: Hash) -> Vec<Content<T>> {

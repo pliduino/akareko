@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::{
@@ -99,24 +101,110 @@ impl Byteable for AuroraStatus {
     }
 }
 
-#[derive(Debug)]
-pub(super) struct AuroraProtocolResponse<P: Byteable> {
-    status: AuroraStatus,
-    payload: Option<P>, // None if status is an error
+enum Either<A, B> {
+    A(A),
+    B(B),
 }
 
-impl<P: Byteable> AuroraProtocolResponse<P> {
+// TODO: Later try to change the vec to a stream
+pub(super) struct StreamDecode<D: Byteable> {
+    d: Either<Vec<D>, u64>,
+}
+
+impl<D: Byteable> StreamDecode<D> {
+    pub fn new(data: Vec<D>) -> Self {
+        Self { d: Either::A(data) }
+    }
+
+    fn new_receiver(len: u64) -> Self {
+        Self { d: Either::B(len) }
+    }
+
+    pub async fn next<R: AsyncRead + Unpin + Send>(
+        &mut self,
+        reader: &mut R,
+    ) -> Result<Option<D>, DecodeError> {
+        match &mut self.d {
+            Either::A(_) => Ok(None),
+            Either::B(len) => {
+                if *len == 0 {
+                    Ok(None)
+                } else {
+                    *len -= 1;
+                    Ok(Some(D::decode(reader).await?))
+                }
+            }
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match &self.d {
+            Either::A(vec) => vec.len(),
+            Either::B(len) => *len as usize,
+        }
+    }
+}
+
+impl<D: Byteable> Byteable for StreamDecode<D> {
+    async fn encode<W: AsyncWrite + Unpin + Send>(
+        &self,
+        writer: &mut W,
+    ) -> Result<(), EncodeError> {
+        match &self.d {
+            Either::A(iter) => {
+                for i in iter {
+                    i.encode(writer).await?;
+                }
+            }
+            Either::B(_) => {
+                return Err(EncodeError::InvalidData);
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn decode<R: AsyncRead + Unpin + Send>(reader: &mut R) -> Result<Self, DecodeError> {
+        Ok(StreamDecode {
+            d: Either::B(u64::decode(reader).await?),
+        })
+    }
+}
+
+pub(super) struct AuroraProtocolResponse<P: Byteable, D: Byteable = ()> {
+    status: AuroraStatus,
+    payload: Option<P>, // None if status is an error
+    data: StreamDecode<D>,
+}
+
+impl<P: Byteable> AuroraProtocolResponse<P, ()> {
     pub fn ok(payload: P) -> Self {
         Self {
             status: AuroraStatus::Ok,
             payload: Some(payload),
+            data: StreamDecode::new_receiver(0),
         }
+    }
+}
+
+impl<P: Byteable, D: Byteable> AuroraProtocolResponse<P, D> {
+    pub fn ok_with_data(payload: P, data: Vec<D>) -> Self {
+        Self {
+            status: AuroraStatus::Ok,
+            payload: Some(payload),
+            data: StreamDecode::new(data),
+        }
+    }
+
+    pub fn data(&mut self) -> &mut StreamDecode<D> {
+        &mut self.data
     }
 
     pub fn not_found(message: String) -> Self {
         Self {
             status: AuroraStatus::NotFound(message),
             payload: None,
+            data: StreamDecode::new(vec![]),
         }
     }
 
@@ -124,6 +212,7 @@ impl<P: Byteable> AuroraProtocolResponse<P> {
         Self {
             status: AuroraStatus::InvalidArgument(message),
             payload: None,
+            data: StreamDecode::new(vec![]),
         }
     }
 
@@ -131,6 +220,7 @@ impl<P: Byteable> AuroraProtocolResponse<P> {
         Self {
             status: AuroraStatus::InternalError(message),
             payload: None,
+            data: StreamDecode::new(vec![]),
         }
     }
 
@@ -167,7 +257,7 @@ impl<C: AuroraProtocolCommand> AuroraProtocolRequest<C> {
     }
 }
 
-impl<P: Byteable> Byteable for AuroraProtocolResponse<P> {
+impl<P: Byteable, D: Byteable> Byteable for AuroraProtocolResponse<P, D> {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
@@ -187,13 +277,16 @@ impl<P: Byteable> Byteable for AuroraProtocolResponse<P> {
             return Ok(AuroraProtocolResponse {
                 status,
                 payload: None,
+                data: StreamDecode::new_receiver(0),
             });
         }
 
         let response = P::decode(reader).await?;
+        let data = StreamDecode::decode(reader).await?;
         Ok(AuroraProtocolResponse {
             status,
             payload: Some(response),
+            data,
         })
     }
 }
