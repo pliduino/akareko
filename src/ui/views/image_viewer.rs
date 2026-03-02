@@ -4,7 +4,10 @@ use async_zip::base::read::seek::ZipFileReader;
 use futures::{AsyncReadExt, SinkExt};
 use iced::{
     Element, Event, Length, Subscription, Task, event,
-    keyboard::{self, Key, key::Named},
+    keyboard::{
+        self, Key,
+        key::{Code, Named},
+    },
     stream,
     widget::{
         self, Scrollable, Space, button, center, column, container,
@@ -52,6 +55,8 @@ pub enum ImageViewerMessage {
     ScrollBy(scrollable::AbsoluteOffset),
     PrevPage,
     NextPage,
+    ZoomIn,
+    ZoomOut,
 }
 
 impl From<ImageViewerMessage> for Message {
@@ -74,24 +79,47 @@ impl ImageViewerView {
     pub fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
             event::listen_with(|event, _, _| {
-                if let Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event {
-                    match key {
-                        Key::Named(Named::ArrowRight) => Some(ImageViewerMessage::NextPage.into()),
-                        Key::Named(Named::ArrowLeft) => Some(ImageViewerMessage::PrevPage.into()),
-                        Key::Named(Named::ArrowUp) => Some(
+                if let Event::Keyboard(keyboard::Event::KeyPressed {
+                    physical_key,
+                    modifiers,
+                    ..
+                }) = event
+                {
+                    match physical_key {
+                        keyboard::key::Physical::Code(Code::ArrowRight) => {
+                            Some(ImageViewerMessage::NextPage.into())
+                        }
+                        keyboard::key::Physical::Code(Code::ArrowLeft) => {
+                            Some(ImageViewerMessage::PrevPage.into())
+                        }
+                        keyboard::key::Physical::Code(Code::ArrowUp) => Some(
                             ImageViewerMessage::ScrollBy(scrollable::AbsoluteOffset {
                                 x: 0.0,
                                 y: -Self::SCROLL_OFFSET,
                             })
                             .into(),
                         ),
-                        Key::Named(Named::ArrowDown) => Some(
+                        keyboard::key::Physical::Code(Code::ArrowDown) => Some(
                             ImageViewerMessage::ScrollBy(scrollable::AbsoluteOffset {
                                 x: 0.0,
                                 y: Self::SCROLL_OFFSET,
                             })
                             .into(),
                         ),
+                        keyboard::key::Physical::Code(Code::Minus) => {
+                            if modifiers.control() {
+                                Some(ImageViewerMessage::ZoomOut.into())
+                            } else {
+                                None
+                            }
+                        }
+                        keyboard::key::Physical::Code(Code::Equal) => {
+                            if modifiers.control() {
+                                Some(ImageViewerMessage::ZoomIn.into())
+                            } else {
+                                None
+                            }
+                        }
                         _ => None,
                     }
                 } else {
@@ -260,7 +288,7 @@ impl ImageViewerView {
         Task::none()
     }
 
-    pub fn view(&self, _: &AppState) -> iced::Element<'_, Message> {
+    pub fn view(&self, state: &AppState) -> iced::Element<'_, Message> {
         let clickable_area = container(row![
             mouse_area(
                 Space::new()
@@ -283,7 +311,9 @@ impl ImageViewerView {
 
         let image: Element<Message> = match self.images.get(self.cur_page - 1) {
             Some(e) => match e {
-                Some(i) => widget::image(i.0.clone()).height(i.1 as f32).into(),
+                Some(i) => widget::image(i.0.clone())
+                    .height(i.1 as f32 * state.config.image_viewer_preferences().zoom())
+                    .into(),
                 None => Space::new().width(Length::Fill).height(Length::Fill).into(),
             },
             None => Scrollable::new(text("Loading..."))
@@ -348,6 +378,14 @@ impl ImageViewerView {
                 }
                 ImageViewerMessage::ScrollBy(offset) => {
                     return scroll_by(SCROLLABLE, offset);
+                }
+                ImageViewerMessage::ZoomIn => {
+                    let new_zoom = state.config.image_viewer_preferences().zoom + 5;
+                    state.config.set_zoom(new_zoom);
+                }
+                ImageViewerMessage::ZoomOut => {
+                    let new_zoom = state.config.image_viewer_preferences().zoom - 5;
+                    state.config.set_zoom(new_zoom);
                 }
             }
         }

@@ -23,15 +23,17 @@ pub struct Content<T: IndexTag> {
     entries: Vec<ContentEntry<T>>,
 }
 
-#[derive(Debug, Clone, SurrealValue)]
+#[derive(Debug, Clone, SurrealValue, byteable_derive::Byteable)]
 pub struct ContentEntry<T: IndexTag> {
     pub title: String,
     pub enumeration: f32,
+    /// If this entry covers multiple enumerations (entire volumes), set this to the last one.
+    pub end: Option<f32>,
     pub path: String,
 
-    pub progress: f32,
-
     pub extra_metadata: T::ExtraMetadata,
+    #[byteable(skip)]
+    pub progress: f32,
 }
 
 impl<I: IndexTag> std::hash::Hash for Content<I> {
@@ -44,35 +46,12 @@ impl<T: IndexTag> ToBytes for ContentEntry<T> {
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes: Vec<u8> = self.title.as_bytes().to_vec();
         bytes.extend(self.enumeration.to_be_bytes());
+        if let Some(end) = self.end {
+            bytes.extend(end.to_be_bytes());
+        }
         bytes.extend(self.path.as_bytes());
         bytes.extend(self.extra_metadata.to_bytes());
         bytes
-    }
-}
-
-impl<T: IndexTag> Byteable for ContentEntry<T> {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-    ) -> Result<(), EncodeError> {
-        self.title.encode(writer).await?;
-        self.enumeration.encode(writer).await?;
-        self.path.encode(writer).await?;
-        self.extra_metadata.encode(writer).await?;
-        Ok(())
-    }
-
-    async fn decode<R: AsyncRead + Unpin + Send>(reader: &mut R) -> Result<Self, DecodeError>
-    where
-        Self: Sized,
-    {
-        Ok(ContentEntry {
-            title: String::decode(reader).await?,
-            enumeration: f32::decode(reader).await?,
-            path: String::decode(reader).await?,
-            extra_metadata: T::ExtraMetadata::decode(reader).await?,
-            progress: 0.0,
-        })
     }
 }
 

@@ -84,9 +84,15 @@ pub enum ImageVisualizationType {
 pub struct ImageViewerPreferences {
     pub double_pages: bool,
     /// Percentage of the image size
-    pub zoom: i8,
+    pub zoom: i16,
     pub scale: ImageScale,
     pub visualization_type: ImageVisualizationType,
+}
+
+impl ImageViewerPreferences {
+    pub fn zoom(&self) -> f32 {
+        self.zoom as f32 / 100.0
+    }
 }
 
 impl Default for ImageViewerPreferences {
@@ -180,6 +186,14 @@ impl AkarekoConfig {
 
     pub fn sam_port(&self) -> u16 {
         self.sam_port
+    }
+
+    pub fn image_viewer_preferences(&self) -> &ImageViewerPreferences {
+        &self.image_viewer_preferences
+    }
+
+    pub fn set_zoom(&mut self, zoom: i16) {
+        self.image_viewer_preferences.zoom = zoom;
     }
 
     pub fn public_key(&self) -> &PublicKey {

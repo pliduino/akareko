@@ -57,7 +57,7 @@ impl<'a> IndexRepository<'a> {
     pub async fn add_content<T: IndexTag + 'static>(
         &self,
         content: Content<T>,
-    ) -> Result<Content<T>, DatabaseError> {
+    ) -> Result<(), DatabaseError> {
         let transaction = self.db.clone().begin().await?;
 
         let timestamp = now_timestamp();
@@ -70,17 +70,14 @@ impl<'a> IndexRepository<'a> {
 
         insert_event(vec![event], &transaction).await?;
 
-        let created: Option<Content<T>> = transaction
-            .upsert((T::CONTENT_TABLE, content.signature().as_base64()))
+        let _: Vec<Value> = transaction
+            .upsert(T::CONTENT_TABLE)
             .content(content)
             .await?;
 
-        let r = match created {
-            Some(n) => n,
-            None => return Err(DatabaseError::Unknown),
-        };
+        transaction.commit().await?;
 
-        Ok(r)
+        Ok(())
     }
 
     pub async fn get_all_indexes<T: IndexTag>(

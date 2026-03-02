@@ -1,7 +1,8 @@
 use iced::{
     Subscription, Task,
-    widget::{Column, button, center, column, row, text, text_input},
+    widget::{Column, button, center, checkbox, column, row, text, text_editor, text_input},
 };
+use iced_aw::number_input;
 
 use crate::{
     db::{
@@ -24,6 +25,7 @@ struct ContentEntryValues {
     title: String,
     path: String,
     enumeration: f32,
+    end: Option<f32>,
 }
 
 #[derive(Debug, Clone)]
@@ -39,6 +41,7 @@ pub enum AddMangaChapterMessage {
 
     UpdateTitle(String, usize),
     UpdateEnumeration(f32, usize),
+    UpdateEnd(Option<f32>, usize),
     UpdatePath(String, usize),
     AddEntry,
     RemoveEntry(usize),
@@ -76,13 +79,36 @@ impl AddMangaChapterView {
             .iter()
             .enumerate()
             .map(|(i, e)| {
+                let mut enum_row: iced::widget::Row<'_, Message> = row![
+                    number_input(&e.enumeration, 0.0.., move |v| {
+                        Message::ViewMessage(ViewMessage::AddChapter(
+                            AddMangaChapterMessage::UpdateEnumeration(v, i),
+                        ))
+                    }),
+                    text("Is Volume: "),
+                    checkbox(e.end.is_some()).on_toggle(move |b| if b {
+                        AddMangaChapterMessage::UpdateEnd(Some(e.enumeration), i).into()
+                    } else {
+                        AddMangaChapterMessage::UpdateEnd(None, i).into()
+                    }),
+                ];
+
+                if let Some(end) = e.end {
+                    enum_row = enum_row.push(text("Ends at: ")).push(number_input(
+                        &end,
+                        0.0..,
+                        move |v| AddMangaChapterMessage::UpdateEnd(Some(v), i).into(),
+                    ));
+                }
+
                 column![
                     text_input("Title", &e.title)
                         .on_input(move |s| AddMangaChapterMessage::UpdateTitle(s, i).into())
                         .width(iced::Length::Fill),
                     text_input("Path", &e.path)
                         .on_input(move |s| AddMangaChapterMessage::UpdatePath(s, i).into())
-                        .width(iced::Length::Fill)
+                        .width(iced::Length::Fill),
+                    enum_row,
                 ]
                 .into()
             })
@@ -120,6 +146,7 @@ impl AddMangaChapterView {
                             .map(|e| ContentEntry {
                                 title: e.title.clone(),
                                 enumeration: e.enumeration,
+                                end: e.end,
                                 path: e.path.clone(),
                                 extra_metadata: MangaChapter::new(Language::English),
                                 progress: 0.0,
@@ -137,6 +164,16 @@ impl AddMangaChapterView {
 
                         let repositories = repositories.clone();
                         return Task::future(async move {
+                            let all = repositories
+                                .index()
+                                .get_filtered_index_contents::<MangaTag>(
+                                    chapter.index_hash().clone(),
+                                    0,
+                                    None,
+                                )
+                                .await;
+                            dbg!(all);
+
                             match repositories.index().add_content(chapter).await {
                                 Ok(_) => {}
                                 Err(e) => {
@@ -158,6 +195,15 @@ impl AddMangaChapterView {
                 }
                 AddMangaChapterMessage::UpdateMagnet(magnet) => {
                     v.magnet = magnet;
+                }
+                AddMangaChapterMessage::UpdateEnd(e, i) => {
+                    v.entries[i].end = e.map(|n| {
+                        if n > v.entries[i].enumeration {
+                            n
+                        } else {
+                            v.entries[i].enumeration
+                        }
+                    });
                 }
                 AddMangaChapterMessage::AddEntry => {
                     v.entries.push(ContentEntryValues::default());

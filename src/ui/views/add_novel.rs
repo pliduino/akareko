@@ -1,7 +1,8 @@
 use iced::{
     Subscription, Task,
-    widget::{button, column, text, text_input},
+    widget::{button, column, row, text, text_input},
 };
+use iced_aw::number_input;
 
 use crate::{
     db::index::{Index, tags::MangaTag},
@@ -14,12 +15,14 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct AddNovelView {
     title: String,
+    release_date: i32,
 }
 
 #[derive(Debug, Clone)]
 pub enum AddNovelMessage {
     AddNovel,
     UpdateTitle(String),
+    UpdateReleaseDate(i32),
     SavedNovel,
 }
 
@@ -33,6 +36,7 @@ impl AddNovelView {
     pub fn new() -> Self {
         Self {
             title: String::new(),
+            release_date: 0,
         }
     }
 
@@ -47,6 +51,12 @@ impl AddNovelView {
     pub fn view(&self, _: &AppState) -> iced::Element<'_, Message> {
         column![
             text_input("Title", &self.title).on_input(|s| AddNovelMessage::UpdateTitle(s).into()),
+            row![
+                text("Release Date: "),
+                number_input(&self.release_date, .., |v| {
+                    AddNovelMessage::UpdateReleaseDate(v).into()
+                })
+            ],
             button(text("Add Novel")).on_press(AddNovelMessage::AddNovel.into())
         ]
         .into()
@@ -58,8 +68,11 @@ impl AddNovelView {
                 AddNovelMessage::AddNovel => {
                     if let Some(repositories) = &state.repositories {
                         let repositories = repositories.clone();
-                        let novel: Index<MangaTag> =
-                            Index::new_signed(v.title.clone(), 0, &state.config.private_key());
+                        let novel: Index<MangaTag> = Index::new_signed(
+                            v.title.clone(),
+                            v.release_date,
+                            &state.config.private_key(),
+                        );
                         return Task::future(async move {
                             repositories.index().add_index(novel).await.unwrap();
                             AddNovelMessage::SavedNovel.into()
@@ -68,6 +81,9 @@ impl AddNovelView {
                 }
                 AddNovelMessage::UpdateTitle(title) => {
                     v.title = title;
+                }
+                AddNovelMessage::UpdateReleaseDate(i) => {
+                    v.release_date = i;
                 }
                 AddNovelMessage::SavedNovel => {
                     v.title = String::new();
