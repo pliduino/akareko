@@ -77,8 +77,6 @@ impl<'a> PostRepository<'a> {
 
             LET $sources = $rows.map(|$r| $r.source);
 
-            RETURN $sources;
-
             {{
                 total: count(
                     SELECT *
@@ -110,7 +108,7 @@ impl<'a> PostRepository<'a> {
             .bind(("take", take))
             .bind(("skip", skip))
             .await?
-            .take(3)?;
+            .take(2)?;
 
         match result {
             Some(r) => Ok(PaginateResponse {

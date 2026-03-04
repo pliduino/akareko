@@ -33,6 +33,12 @@
           packages = with pkgs; [
             cargo
             clang
+
+            xdotool
+            libappindicator-gtk3
+            libayatana-appindicator
+            pango
+
             clang-tools
             rust-analyzer
             rustc
@@ -47,9 +53,11 @@
           buildInputs = with pkgs; [
             openssl
             sqlite
+            glib
           ];
 
           nativeBuildInputs = with pkgs; [
+            pkg-config
           ];
 
           RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;

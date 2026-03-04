@@ -1,3 +1,4 @@
+use base64::{Engine, prelude::BASE64_STANDARD_NO_PAD};
 use serde::{Deserialize, Serialize};
 use surrealdb::types::{SerializationError, SurrealValue};
 
@@ -7,6 +8,7 @@ use crate::{
         index::{Index, content::Content, tags::IndexTag},
         user::User,
     },
+    errors::DecodeError,
     hash::{Hash, PublicKey, Signature},
 };
 
@@ -53,6 +55,10 @@ impl Topic {
 
     pub fn from_bytes(bytes: [u8; 64]) -> Self {
         Self(bytes)
+    }
+
+    pub fn as_base64(&self) -> String {
+        BASE64_STANDARD_NO_PAD.encode(&self.0)
     }
 
     pub fn inner(&self) -> &[u8; 64] {

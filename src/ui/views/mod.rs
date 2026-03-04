@@ -15,7 +15,7 @@ use crate::ui::{
     AppState, Message,
     views::{
         add_chapter::{AddMangaChapterMessage, AddMangaChapterView},
-        add_novel::{AddNovelMessage, AddNovelView},
+        add_novel::{AddMangaMessage, AddNovelView},
         database_viewer::{DatabaseViewerMessage, DatabaseViewerView},
         home::{HomeMessage, HomeView},
         image_viewer::{ImageViewerMessage, ImageViewerView},
@@ -30,7 +30,7 @@ use crate::ui::{
 #[derive(Debug, Clone)]
 pub enum View {
     Home(HomeView),
-    NovelList(MangaListView),
+    MangaList(MangaListView),
     Novel(MangaView),
     AddNovel(AddNovelView),
     AddChapter(AddMangaChapterView),
@@ -44,10 +44,10 @@ pub enum View {
 #[derive(Debug, Clone)]
 pub enum ViewMessage {
     Home(HomeMessage),
-    NovelList(MangaListMessage),
-    Novel(MangaMessage),
-    AddNovel(AddNovelMessage),
-    AddChapter(AddMangaChapterMessage),
+    MangaList(MangaListMessage),
+    Manga(MangaMessage),
+    AddManga(AddMangaMessage),
+    AddMangaChapter(AddMangaChapterMessage),
     Settings(SettingsMessage),
     ImageViewer(ImageViewerMessage),
     UserList(UserListMessage),
@@ -59,7 +59,7 @@ impl View {
     pub fn on_enter(state: &mut AppState) -> Task<Message> {
         match state.view {
             View::Home(_) => HomeView::on_enter(state),
-            View::NovelList(_) => MangaListView::on_enter(state),
+            View::MangaList(_) => MangaListView::on_enter(state),
             View::Novel(_) => MangaView::on_enter(state),
             View::AddNovel(_) => AddNovelView::on_enter(state),
             View::AddChapter(_) => AddMangaChapterView::on_enter(state),
@@ -74,7 +74,7 @@ impl View {
     pub fn view(state: &AppState) -> iced::Element<'_, Message> {
         match &state.view {
             View::Home(v) => v.view(state),
-            View::NovelList(v) => v.view(state),
+            View::MangaList(v) => v.view(state),
             View::Novel(v) => v.view(state),
             View::AddNovel(v) => v.view(state),
             View::AddChapter(v) => v.view(state),
@@ -89,10 +89,10 @@ impl View {
     pub fn update(message: ViewMessage, state: &mut AppState) -> Task<Message> {
         match message {
             ViewMessage::Home(m) => HomeView::update(m, state),
-            ViewMessage::NovelList(m) => MangaListView::update(m, state),
-            ViewMessage::Novel(m) => MangaView::update(m, state),
-            ViewMessage::AddNovel(m) => AddNovelView::update(m, state),
-            ViewMessage::AddChapter(m) => AddMangaChapterView::update(m, state),
+            ViewMessage::MangaList(m) => MangaListView::update(m, state),
+            ViewMessage::Manga(m) => MangaView::update(m, state),
+            ViewMessage::AddManga(m) => AddNovelView::update(m, state),
+            ViewMessage::AddMangaChapter(m) => AddMangaChapterView::update(m, state),
             ViewMessage::Settings(m) => SettingsView::update(m, state),
             ViewMessage::ImageViewer(m) => ImageViewerView::update(m, state),
             ViewMessage::UserList(m) => UserListView::update(m, state),
@@ -104,7 +104,7 @@ impl View {
     pub fn subscription(&self) -> iced::Subscription<Message> {
         match self {
             View::Home(v) => v.subscription(),
-            View::NovelList(v) => v.subscription(),
+            View::MangaList(v) => v.subscription(),
             View::Novel(v) => v.subscription(),
             View::AddNovel(v) => v.subscription(),
             View::AddChapter(v) => v.subscription(),

@@ -19,16 +19,16 @@ pub struct AddNovelView {
 }
 
 #[derive(Debug, Clone)]
-pub enum AddNovelMessage {
+pub enum AddMangaMessage {
     AddNovel,
     UpdateTitle(String),
     UpdateReleaseDate(i32),
     SavedNovel,
 }
 
-impl From<AddNovelMessage> for Message {
-    fn from(m: AddNovelMessage) -> Self {
-        Message::ViewMessage(ViewMessage::AddNovel(m))
+impl From<AddMangaMessage> for Message {
+    fn from(m: AddMangaMessage) -> Self {
+        Message::ViewMessage(ViewMessage::AddManga(m))
     }
 }
 
@@ -50,22 +50,22 @@ impl AddNovelView {
 
     pub fn view(&self, _: &AppState) -> iced::Element<'_, Message> {
         column![
-            text_input("Title", &self.title).on_input(|s| AddNovelMessage::UpdateTitle(s).into()),
+            text_input("Title", &self.title).on_input(|s| AddMangaMessage::UpdateTitle(s).into()),
             row![
                 text("Release Date: "),
                 number_input(&self.release_date, .., |v| {
-                    AddNovelMessage::UpdateReleaseDate(v).into()
+                    AddMangaMessage::UpdateReleaseDate(v).into()
                 })
             ],
-            button(text("Add Novel")).on_press(AddNovelMessage::AddNovel.into())
+            button(text("Add Novel")).on_press(AddMangaMessage::AddNovel.into())
         ]
         .into()
     }
 
-    pub fn update(m: AddNovelMessage, state: &mut AppState) -> Task<Message> {
+    pub fn update(m: AddMangaMessage, state: &mut AppState) -> Task<Message> {
         if let View::AddNovel(v) = &mut state.view {
             match m {
-                AddNovelMessage::AddNovel => {
+                AddMangaMessage::AddNovel => {
                     if let Some(repositories) = &state.repositories {
                         let repositories = repositories.clone();
                         let novel: Index<MangaTag> = Index::new_signed(
@@ -75,19 +75,19 @@ impl AddNovelView {
                         );
                         return Task::future(async move {
                             repositories.index().add_index(novel).await.unwrap();
-                            AddNovelMessage::SavedNovel.into()
+                            AddMangaMessage::SavedNovel.into()
                         });
                     }
                 }
-                AddNovelMessage::UpdateTitle(title) => {
+                AddMangaMessage::UpdateTitle(title) => {
                     v.title = title;
                 }
-                AddNovelMessage::UpdateReleaseDate(i) => {
+                AddMangaMessage::UpdateReleaseDate(i) => {
                     v.release_date = i;
                 }
-                AddNovelMessage::SavedNovel => {
+                AddMangaMessage::SavedNovel => {
                     v.title = String::new();
-                    return Task::done(Message::ChangeView(View::NovelList(MangaListView::new())));
+                    return Task::done(Message::ChangeView(View::MangaList(MangaListView::new())));
                 }
             }
         }

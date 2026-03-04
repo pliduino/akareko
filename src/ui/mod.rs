@@ -1,15 +1,18 @@
 use anawt::{AlertCategory, SettingsPack, TorrentClient, options::AnawtOptions};
+use clap::Parser;
 use iced::{
     Length, Subscription, Task, Theme, alignment,
     widget::{Column, Container, button, column, stack, text},
     window,
 };
 use rclite::Arc;
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
 use tokio::sync::{Mutex, RwLock, mpsc};
 use tracing::{error, info};
+use trayicon::TrayIcon;
 
 use crate::{
+    CliArgs,
     config::AkarekoConfig,
     db::{
         FullSyncTarget, Repositories,
@@ -29,6 +32,7 @@ use crate::{
             modal::{Modal, ModalMessage, modal},
             toast::{Toast, ToastType, toast_worker},
         },
+        tray::initialize_tray_icon,
         views::{View, ViewMessage, home::HomeView},
     },
 };
@@ -36,11 +40,20 @@ use crate::{
 mod components;
 mod icons;
 mod style;
+mod tray;
 mod views;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TrayIconMessage {
+    OpenWindow,
+    Exit,
+}
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    OpenWindow,
+    OpenWindow(WindowType),
+    CloseWindow(iced::window::Id),
+    Exit,
 
     RepositoryLoaded(Repositories),
     ConfigLoaded(AkarekoConfig),
@@ -65,6 +78,8 @@ pub enum Message {
     RemoveSchedule(Schedule),
     LoadFullSyncAddresses(Vec<(I2PAddress, FullSyncTarget)>),
     TryConsumeSchedule,
+
+    TrayIconMessage(TrayIconMessage),
 
     Nothing,
 }
@@ -101,6 +116,11 @@ impl<T, const N: usize> LiFo<T, N> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WindowType {
+    Main,
+}
+
 pub struct AppState {
     repositories: Option<Repositories>,
     config: AkarekoConfig,
@@ -119,11 +139,16 @@ pub struct AppState {
 
     theme: Theme,
 
+    tray_icon: TrayIcon<TrayIconMessage>,
+
+    windows: BTreeMap<window::Id, WindowType>,
+
     modal: Option<Modal>,
 }
 
 impl AppState {
     pub fn new() -> Self {
+        let tray_icon = initialize_tray_icon();
         Self {
             repositories: None,
             config: AkarekoConfig::default(),
@@ -137,7 +162,24 @@ impl AppState {
             theme: Theme::CatppuccinMocha,
             modal: None,
             scheduler: Scheduler::new(),
+            tray_icon,
+            windows: BTreeMap::new(),
         }
+    }
+
+    pub fn boot() -> (AppState, Task<Message>) {
+        let args = CliArgs::parse();
+
+        let open_task = match args.minimized {
+            true => Task::none(),
+            false => Task::done(Message::OpenWindow(WindowType::Main)),
+        };
+        (
+            AppState::new(),
+            open_task.chain(Task::perform(AkarekoConfig::load(), |c| {
+                Message::ConfigLoaded(c)
+            })),
+        )
     }
 
     fn has_initialized(&self) -> bool {
@@ -187,10 +229,9 @@ impl AppState {
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
-        pub use Message::*;
-
         match message {
-            ConfigLoaded(c) => {
+            Message::Exit => return iced::exit(),
+            Message::ConfigLoaded(c) => {
                 self.config = c.clone();
 
                 // Nothing is using it here as it's still in the initialization process so it's ok to use blocking_write
@@ -202,11 +243,13 @@ impl AppState {
                 let config = self.config.clone();
 
                 return Task::batch([
-                    Task::perform(AkarekoClient::new(config.clone()), |c| ClientLoaded(c)),
+                    Task::perform(AkarekoClient::new(config.clone()), |c| {
+                        Message::ClientLoaded(c)
+                    }),
                     Task::future(async move {
                         info!("Initializing Repositories...");
                         let r = Repositories::initialize(&config).await;
-                        RepositoryLoaded(r)
+                        Message::RepositoryLoaded(r)
                     }),
                     Task::future(async move {
                         let mut settings_pack = SettingsPack::new();
@@ -222,7 +265,7 @@ impl AppState {
                             Ok(_) => {}
                             Err(e) => {
                                 error!("Failed to load torrents: {}", e);
-                                return PostToast(Toast {
+                                return Message::PostToast(Toast {
                                     title: "Failed to load torrents".to_string(),
                                     body: e.to_string(),
                                     ty: ToastType::Error,
@@ -230,11 +273,11 @@ impl AppState {
                             }
                         }
 
-                        TorrentClientLoaded(client)
+                        Message::TorrentClientLoaded(client)
                     }),
                 ]);
             }
-            RepositoryLoaded(r) => {
+            Message::RepositoryLoaded(r) => {
                 self.repositories = Some(r.clone());
 
                 let server_config = self.server_config.clone();
@@ -264,16 +307,16 @@ impl AppState {
                     Message::LoadFullSyncAddresses(addresses)
                 });
             }
-            TorrentClientLoaded(t) => {
+            Message::TorrentClientLoaded(t) => {
                 self.torrent_client = Some(t);
             }
-            ClientLoaded(client) => {
+            Message::ClientLoaded(client) => {
                 self.client_pool = Some(ClientPool::new(
                     client,
                     self.config.max_client_connections() as u16,
                 ));
             }
-            DownloadTorrent { magnet, path } => {
+            Message::DownloadTorrent { magnet, path } => {
                 if let Some(torrent_client) = &self.torrent_client {
                     let client = torrent_client.clone();
 
@@ -283,43 +326,43 @@ impl AppState {
                     });
                 }
             }
-            ChangeView(v) => {
+            Message::ChangeView(v) => {
                 let old_view = std::mem::replace(&mut self.view, v);
                 self.history.push(old_view);
                 return View::on_enter(self);
             }
-            ViewMessage(m) => {
+            Message::ViewMessage(m) => {
                 return View::update(m, self);
             }
-            ModalMessage(m) => {
+            Message::ModalMessage(m) => {
                 return Modal::update(m, self);
             }
-            BackHistory => {
+            Message::BackHistory => {
                 if let Some(v) = self.history.pop() {
                     self.view = v;
                     return View::on_enter(self);
                 }
             }
-            ToastSenderReady(tx) => {
+            Message::ToastSenderReady(tx) => {
                 if self.toast_tx.is_some() {
                     error!("Tried to set ToastSenderReady twice");
                 } else {
                     self.toast_tx = Some(tx);
                 }
             }
-            PostToast(toast) => {
+            Message::PostToast(toast) => {
                 self.add_toast(toast);
             }
-            CloseToast(i) => {
+            Message::CloseToast(i) => {
                 self.toasts.remove(i);
             }
-            OpenModal(m) => {
+            Message::OpenModal(m) => {
                 self.modal = Some(m);
             }
-            CloseModal => {
+            Message::CloseModal => {
                 self.close_modal();
             }
-            SaveTorrent => {
+            Message::SaveTorrent => {
                 if let Some(client) = &self.torrent_client {
                     let client = client.clone();
                     return Task::future(async move {
@@ -328,21 +371,37 @@ impl AppState {
                     });
                 }
             }
-            OpenWindow => {
-                return window::open(window::Settings {
+            Message::OpenWindow(window_type) => {
+                match window_type {
+                    WindowType::Main => {
+                        if self.windows.values().any(|v| *v == window_type) {
+                            return Task::done(Message::Nothing);
+                        }
+                    }
+                }
+
+                let (id, task) = window::open(window::Settings {
                     size: iced::Size::new(800.0, 600.0),
+                    maximized: true,
+                    exit_on_close_request: false,
                     ..Default::default()
-                })
-                .1
-                .map(|_| Message::Nothing);
+                });
+
+                self.windows.insert(id, window_type);
+
+                return task.map(|_| Message::Nothing);
             }
-            AddSchedule(schedule) => {
+            Message::CloseWindow(id) => {
+                let window_type = self.windows.remove(&id).unwrap();
+                return window::close(id);
+            }
+            Message::AddSchedule(schedule) => {
                 self.scheduler.schedule(schedule);
             }
-            RemoveSchedule(schedule) => {
+            Message::RemoveSchedule(schedule) => {
                 self.scheduler.remove(schedule);
             }
-            TryConsumeSchedule => {
+            Message::TryConsumeSchedule => {
                 let (Some(pool), Some(db)) = (self.client_pool.clone(), self.repositories.clone())
                 else {
                     return Task::none();
@@ -436,7 +495,7 @@ impl AppState {
                     })
                 });
             }
-            LoadFullSyncAddresses(a) => {
+            Message::LoadFullSyncAddresses(a) => {
                 for (address, target) in a {
                     self.scheduler.schedule(Schedule {
                         when: target.last_sync + self.config.scheduler_config().full_sync_interval,
@@ -446,7 +505,15 @@ impl AppState {
                     });
                 }
             }
-            Nothing => {}
+            Message::TrayIconMessage(m) => match m {
+                TrayIconMessage::OpenWindow => {
+                    return Task::done(Message::OpenWindow(WindowType::Main));
+                }
+                TrayIconMessage::Exit => {
+                    return Task::done(Message::Exit);
+                }
+            },
+            Message::Nothing => {}
         }
 
         Task::none()
@@ -464,12 +531,16 @@ impl AppState {
         let toast_subscription = Subscription::run(toast_worker);
         let view_subscription = self.view.subscription();
 
+        let tray_icon_subscription = self.tray_icon.subscribe();
+
         Subscription::batch([
             iced::time::every(std::time::Duration::from_millis(500)).map(|_| Message::Nothing),
             iced::time::every(std::time::Duration::from_millis(3500))
                 .map(|_| Message::TryConsumeSchedule),
             toast_subscription,
             view_subscription,
+            window::close_requests().map(Message::CloseWindow),
+            tray_icon_subscription.map(|m| Message::TrayIconMessage(m)),
         ])
     }
 }

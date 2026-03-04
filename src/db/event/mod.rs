@@ -1,5 +1,6 @@
 use std::path::Display;
 
+use const_format::formatcp;
 use fastbloom::BloomFilter;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use strum_macros::{EnumCount, EnumIter};
@@ -27,6 +28,49 @@ pub struct Event {
 pub async fn insert_event(events: Vec<Event>, db: &Transaction<Db>) -> Result<(), DatabaseError> {
     let _: Vec<Value> = db.insert("events").content(events).await?;
     Ok(())
+}
+
+pub async fn get_paginated_events(
+    page: usize,
+    per_page: usize,
+    db: &Surreal<Db>,
+) -> Result<(Vec<Event>, usize), DatabaseError> {
+    const QUERY: &str = "
+        LET $rows = (
+            SELECT *
+            FROM events
+            ORDER BY timestamp DESC
+            LIMIT $take
+            START $skip
+        );
+
+        {{
+            total: count(
+                SELECT *
+                FROM events
+            ),
+            data: $rows
+        }}
+        ";
+
+    #[derive(SurrealValue)]
+    struct Response {
+        total: usize,
+        data: Vec<Event>,
+    }
+
+    let events: Vec<Response> = db
+        .query(QUERY)
+        .bind(("take", per_page))
+        .bind(("skip", (page - 1) * per_page))
+        .await?
+        .take(1)?;
+
+    if let Some(response) = events.into_iter().next() {
+        return Ok((response.data, (response.total / per_page) + 1));
+    }
+
+    Err(DatabaseError::Unknown)
 }
 
 pub async fn filter_events(

@@ -52,7 +52,7 @@ pub enum AddMangaChapterMessage {
 
 impl From<AddMangaChapterMessage> for Message {
     fn from(m: AddMangaChapterMessage) -> Self {
-        Message::ViewMessage(ViewMessage::AddChapter(m))
+        Message::ViewMessage(ViewMessage::AddMangaChapter(m))
     }
 }
 
@@ -81,7 +81,7 @@ impl AddMangaChapterView {
             .map(|(i, e)| {
                 let mut enum_row: iced::widget::Row<'_, Message> = row![
                     number_input(&e.enumeration, 0.0.., move |v| {
-                        Message::ViewMessage(ViewMessage::AddChapter(
+                        Message::ViewMessage(ViewMessage::AddMangaChapter(
                             AddMangaChapterMessage::UpdateEnumeration(v, i),
                         ))
                     }),
@@ -164,16 +164,6 @@ impl AddMangaChapterView {
 
                         let repositories = repositories.clone();
                         return Task::future(async move {
-                            let all = repositories
-                                .index()
-                                .get_filtered_index_contents::<MangaTag>(
-                                    chapter.index_hash().clone(),
-                                    0,
-                                    None,
-                                )
-                                .await;
-                            dbg!(all);
-
                             match repositories.index().add_content(chapter).await {
                                 Ok(_) => {}
                                 Err(e) => {

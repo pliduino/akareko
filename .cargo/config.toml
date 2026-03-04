@@ -1,11 +1,9 @@
 [target.x86_64-pc-windows-msvc]
-rustflags = [
-    "-Ctarget-feature=+crt-static",
-]
+linker = "lld-link"
 
 [build]
 rustflags = [
     "-Clinker-plugin-lto",
     "-Clinker=clang",
-    "-Clink-arg=-fuse-ld=lld"
+    # "-Clink-arg=-fuse-ld=lld"
 ]

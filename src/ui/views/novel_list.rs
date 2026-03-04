@@ -28,7 +28,7 @@ pub enum MangaListMessage {
 
 impl From<MangaListMessage> for Message {
     fn from(msg: MangaListMessage) -> Message {
-        Message::ViewMessage(ViewMessage::NovelList(msg))
+        Message::ViewMessage(ViewMessage::MangaList(msg))
     }
 }
 
@@ -87,7 +87,7 @@ impl MangaListView {
     }
 
     pub fn update(m: MangaListMessage, state: &mut AppState) -> Task<Message> {
-        if let View::NovelList(v) = &mut state.view {
+        if let View::MangaList(v) = &mut state.view {
             match m {
                 MangaListMessage::LoadedMangas(novels) => {
                     v.mangas = novels;

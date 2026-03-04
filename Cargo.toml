@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-tokio = { version = "1.47.1", features = [
+tokio = { version = "1.50.0", features = [
     "sync",
     "rt-multi-thread",
     "macros",
@@ -68,6 +68,10 @@ fastbloom = { version = "0.16.0", features = ["serde"] }
 num_enum = "0.7.5"
 strum = "0.28.0"
 strum_macros = "0.28.0"
+# tray-icon = "0.21.3"
+trayicon = { git = "https://github.com/pliduino/trayicon-rs.git", branch = "master", features = ["iced"] }
+clap = { version = "4.5.60", features = ["derive"] }
+# trayicon = "0.4.0"
 # diesel = { version = "2.3.6", features = ["sqlite"] }
 # diesel-async = { version = "0.7.4", features = ["sqlite", "bb8", "migrations"] }
 

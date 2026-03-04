@@ -55,7 +55,7 @@ pub enum MangaMessage {
 
 impl From<MangaMessage> for Message {
     fn from(m: MangaMessage) -> Self {
-        Message::ViewMessage(ViewMessage::Novel(m))
+        Message::ViewMessage(ViewMessage::Manga(m))
     }
 }
 

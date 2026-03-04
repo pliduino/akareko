@@ -36,8 +36,8 @@ impl HomeView {
 
     pub fn view(&self, _: &AppState) -> iced::Element<'_, Message> {
         column![
-            button(text("Novels"))
-                .on_press(Message::ChangeView(View::NovelList(MangaListView::new()))),
+            button(text("Manga"))
+                .on_press(Message::ChangeView(View::MangaList(MangaListView::new()))),
             button(text("Settings"))
                 .on_press(Message::ChangeView(View::Settings(SettingsView::new()))),
             button(text("Add user"))
