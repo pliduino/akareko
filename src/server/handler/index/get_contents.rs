@@ -5,10 +5,7 @@ use fastbloom::BloomFilter;
 use crate::{
     db::{
         Timestamp,
-        index::{
-            content::Content,
-            tags::{IndexTag, MangaTag},
-        },
+        index::{content::Content, tags::IndexTag},
         user::I2PAddress,
     },
     hash::Hash,
@@ -17,10 +14,10 @@ use crate::{
 
 pub struct GetContents<I: IndexTag>(PhantomData<I>);
 
-impl AkarekoProtocolCommand for GetContents<MangaTag> {
+impl<I: IndexTag> AkarekoProtocolCommand for GetContents<I> {
     type RequestPayload = GetContentsRequest;
     type ResponsePayload = GetContentsResponse;
-    type ResponseData = Content<MangaTag>;
+    type ResponseData = Content<I>;
 
     async fn process(
         req: Self::RequestPayload,
@@ -30,7 +27,7 @@ impl AkarekoProtocolCommand for GetContents<MangaTag> {
         let contents = match state
             .repositories
             .index()
-            .get_filtered_index_contents::<MangaTag>(req.index, req.after, req.filter)
+            .get_filtered_index_contents::<I>(req.index, req.after, req.filter)
             .await
         {
             Ok(c) => c,

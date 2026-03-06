@@ -10,54 +10,42 @@ use crate::{
     server::{ServerState, handler::AkarekoProtocolCommand, protocol::AkarekoProtocolResponse},
 };
 
-pub struct GetIndexes;
+pub struct GetIndexes<I: IndexTag>(std::marker::PhantomData<I>);
 
-impl AkarekoProtocolCommand for GetIndexes {
+impl<I: IndexTag> AkarekoProtocolCommand for GetIndexes<I> {
     type RequestPayload = GetIndexesRequest;
     type ResponsePayload = GetIndexesResponse;
-    type ResponseData = Index<NoTag>;
+    type ResponseData = Index<I>;
 
     async fn process(
         req: Self::RequestPayload,
         state: &ServerState,
         _: &I2PAddress,
     ) -> AkarekoProtocolResponse<Self::ResponsePayload, Self::ResponseData> {
-        match req.tag.as_str() {
-            MangaTag::TAG => {
-                let indexes = match state
-                    .repositories
-                    .index()
-                    .get_indexes::<MangaTag>(&req.indexes)
-                    .await
-                {
-                    Ok(i) => i,
-                    Err(_) => {
-                        return AkarekoProtocolResponse::internal_error(format!("Database error"));
-                    }
-                };
-
-                // SAFETY: They are all the same type, just different tags
-                AkarekoProtocolResponse::ok_with_data(GetIndexesResponse {}, unsafe {
-                    std::mem::transmute(indexes)
-                })
+        let indexes = match state
+            .repositories
+            .index()
+            .get_indexes::<I>(&req.indexes)
+            .await
+        {
+            Ok(i) => i,
+            Err(_) => {
+                return AkarekoProtocolResponse::internal_error(format!("Database error"));
             }
-            _ => AkarekoProtocolResponse::invalid_argument(format!("Invalid tag: {}", req.tag)),
-        }
+        };
+
+        AkarekoProtocolResponse::ok_with_data(GetIndexesResponse {}, indexes)
     }
 }
 
 #[derive(byteable_derive::Byteable)]
 pub struct GetIndexesRequest {
-    tag: String,
     indexes: Vec<Hash>,
 }
 
 impl GetIndexesRequest {
-    pub fn new<T: IndexTag>(indexes: Vec<Hash>) -> Self {
-        Self {
-            tag: T::TAG.to_string(),
-            indexes,
-        }
+    pub fn new(indexes: Vec<Hash>) -> Self {
+        Self { indexes }
     }
 }
 

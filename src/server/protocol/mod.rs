@@ -1,9 +1,9 @@
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::{
-    errors::{ClientError, DecodeError, EncodeError},
+    errors::{ClientError, DatabaseError, DecodeError, EncodeError},
     helpers::Byteable,
-    server::handler::AkarekoProtocolCommand,
+    server::handler::{AkarekoProtocolCommand, AkarekoProtocolCommandMetadata},
 };
 
 #[repr(u8)]
@@ -244,7 +244,7 @@ impl<P: Byteable, D: Byteable> AkarekoProtocolResponse<P, D> {
     }
 }
 
-impl<C: AkarekoProtocolCommand> AkarekoProtocolRequest<C> {
+impl<C: AkarekoProtocolCommand + AkarekoProtocolCommandMetadata> AkarekoProtocolRequest<C> {
     pub async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,

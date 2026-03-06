@@ -2,7 +2,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
     db::{index::tags::MangaTag, user::I2PAddress},
-    errors::{ClientError, DecodeError, EncodeError},
+    errors::{ClientError, DecodeError, EncodeError, ServerError},
     helpers::Byteable,
     server::{
         ServerState,
@@ -22,13 +22,17 @@ pub mod post {
         GetPostsByTopic, GetPostsByTopicRequest, GetPostsByTopicResponse,
     };
 }
+pub mod relay {
+    mod post_content;
+    pub use post_content::{PostContent, PostContentRequest, PostContentResponse};
+}
 pub mod users;
 
 /// Marker implemented by the handler macro
 pub trait CommandEnum: Byteable {}
 
 /// Should be implemented by each command, can be skipped by directly implementing [`AkarekoProtocolCommandHandler`]
-pub(super) trait AkarekoProtocolCommand: Sized + AkarekoProtocolCommandMetadata {
+pub(super) trait AkarekoProtocolCommand: Sized {
     type RequestPayload: Byteable;
     type ResponsePayload: Byteable;
     type ResponseData: Byteable;
@@ -48,7 +52,7 @@ pub trait AkarekoProtocolCommandRequest<P, R> {
     ) -> Result<R, ClientError>;
 }
 
-impl<T: AkarekoProtocolCommand>
+impl<T: AkarekoProtocolCommand + AkarekoProtocolCommandMetadata>
     AkarekoProtocolCommandRequest<
         T::RequestPayload,
         AkarekoProtocolResponse<T::ResponsePayload, T::ResponseData>,
@@ -101,7 +105,23 @@ pub trait AkarekoProtocolCommandMetadata {
     }
 }
 
-pub trait AkarekoMiddleware {}
+pub trait AkarekoMiddleware {
+    fn apply(
+        state: &ServerState,
+        address: &I2PAddress,
+    ) -> impl Future<Output = Result<(), ServerError>>;
+}
+
+struct RelayMiddleware;
+impl AkarekoMiddleware for RelayMiddleware {
+    async fn apply(state: &ServerState, _address: &I2PAddress) -> Result<(), ServerError> {
+        if !state.config.read().await.is_relay() {
+            return Err(ServerError::RelayNotEnabled);
+        }
+
+        Ok(())
+    }
+}
 
 crate::handler!(V1,
 {
@@ -111,13 +131,15 @@ crate::handler!(V1,
     GetUsers("user/get_users") => users::GetUsers,
 
     // ==================== Index ====================
-    GetAllIndexes("index/get_all_indexes") => index::GetAllIndexes,
-    GetIndexes("index/get_indexes") => index::GetIndexes,
-    GetContents("index/manga/get_contents") => index::GetContents<MangaTag>,
+    GetAllIndexes("manga/get_all_indexes") => index::GetAllIndexes<MangaTag>,
+    GetIndexes("manga/get_indexes") => index::GetIndexes<MangaTag>,
+    GetContents("manga/get_contents") => index::GetContents<MangaTag>,
 
     // ==================== Post ====================
     GetPostsByTopic("post/get_posts_by_topic") => post::GetPostsByTopic,
 
     // ==================== Events ====================
     SyncEvents("event/sync_events") => events::SyncEvents
+
+    // ==================== Title ====================
 });

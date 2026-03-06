@@ -4,7 +4,7 @@ macro_rules! handler {
         $version:ident,
         {
             $(
-                $command:ident ($cmd_discriminant:literal) => $handler:path
+                $command:ident ($cmd_discriminant:literal $(, $middleware:ident)?) => $handler:path
             ),* $(,)?
         }
     ) => {
@@ -19,7 +19,7 @@ macro_rules! handler {
                 )*
             }
             impl CommandEnum for [<Commands $version>] {}
-            impl Byteable for CommandsV1 {
+            impl Byteable for [<Commands $version>] {
                 async fn encode<W: AsyncWrite + Unpin + Send>(
                     &self,
                     writer: &mut W,
@@ -63,6 +63,9 @@ macro_rules! handler {
                     match command {
                         $(
                             [<Commands $version>]::$command => {
+                                $(
+                                    $middleware::apply(state, address).await.unwrap();
+                                )*
                                 <$handler as AkarekoProtocolCommandHandler>::handle(stream, state, address).await;
                             }
                         )*

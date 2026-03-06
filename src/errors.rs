@@ -40,7 +40,7 @@ error_set::error_set! {
 
     DatabaseError := {Unknown} || SurrealError /*|| DieselError */
 
-    ServerError := YosemiteError
+    ServerError := { RelayNotEnabled } || YosemiteError || IoError
 
     InvalidSignature := {
         InvalidSignature
