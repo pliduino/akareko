@@ -1,3 +1,8 @@
+use std::{
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
+
 use anawt::TorrentClient;
 use freya::{
     prelude::*,
@@ -29,6 +34,12 @@ pub use router::{Route, RouteContext};
 
 const DEFAULT_PAGE_PADDING: Gaps = Gaps::new(20., 50., 0., 50.);
 const DEFAULT_CORNER_RADIUS: f32 = 10.;
+const UNKNOWN_COVER: (&'static str, Bytes) = (
+    "unknown_cover",
+    Bytes::from_static(include_bytes!("../../assets/placeholder_cover.png")),
+);
+
+struct UniqueMainWindowMarker;
 
 #[derive(Clone)]
 struct IndexComponent<I: IndexTag + 'static> {
@@ -49,13 +60,45 @@ impl<I: IndexTag + 'static> Component for IndexComponent<I> {
             });
         };
 
+        let cover_image = rect()
+            .child(
+                ImageViewer::new(UNKNOWN_COVER)
+                    .corner_radius(DEFAULT_CORNER_RADIUS)
+                    .height(Size::px(200.)),
+            )
+            .on_press(on_press.clone())
+            .on_pointer_enter(|_| {
+                Cursor::set(CursorIcon::Pointer);
+            })
+            .on_pointer_leave(|_| {
+                Cursor::set(CursorIcon::default());
+            });
+
         rect()
-            .width(Size::Fill)
-            .child(label().text(self.index.title().clone()))
-            .on_press(on_press)
+            .horizontal()
+            .spacing(10.)
+            .border(Some(Border::new().fill(Color::GRAY).width(2.)))
+            .padding(10.)
+            .with_corner_radius(DEFAULT_CORNER_RADIUS)
+            .child(cover_image)
+            .child(
+                rect().width(Size::px(250.)).child(
+                    label()
+                        .text(self.index.title().clone())
+                        .font_weight(FontWeight::BOLD)
+                        .on_press(on_press)
+                        .on_pointer_enter(|_| {
+                            Cursor::set(CursorIcon::Pointer);
+                        })
+                        .on_pointer_leave(|_| {
+                            Cursor::set(CursorIcon::default());
+                        }),
+                ),
+            )
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct AkarekoApp {
     radio_station: RadioStation<AppState, AppChannel>,
     router: RouteContext,
@@ -78,6 +121,8 @@ pub enum AppChannel {
     Server,
     Client,
     TorrentClient,
+
+    Window,
 }
 
 pub enum ResourceState<T, E> {
@@ -89,6 +134,15 @@ pub enum ResourceState<T, E> {
 
 impl<T, E> ResourceState<T, E> {
     pub fn unwrap_ref(&self) -> &T {
+        match self {
+            ResourceState::Pending => panic!("ResourceState::Pending"),
+            ResourceState::Error(_) => panic!("ResourceState::Error"),
+            ResourceState::Loading => panic!("ResourceState::Loading"),
+            ResourceState::Loaded(t) => t,
+        }
+    }
+
+    pub fn mut_unwrap_ref(&mut self) -> &mut T {
         match self {
             ResourceState::Pending => panic!("ResourceState::Pending"),
             ResourceState::Error(_) => panic!("ResourceState::Error"),
@@ -109,12 +163,45 @@ impl<T: Clone, E: Clone> Clone for ResourceState<T, E> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum AppWindowType {
+    Main,
+}
+
 pub struct AppState {
     pub config: ResourceState<AkarekoConfig, ()>,
     pub repositories: ResourceState<Repositories, ()>,
     pub torrent_client: ResourceState<TorrentClient, ()>,
     pub server: ResourceState<(), ()>,
     pub client: ResourceState<ClientPool, ()>,
+    pub windows_state: AppWindowState,
+}
+
+pub struct AppWindowState {
+    windows: Vec<AppWindowType>,
+}
+
+impl AppWindowState {
+    fn new() -> Self {
+        Self { windows: vec![] }
+    }
+
+    pub fn try_add_window(&mut self, window_type: AppWindowType) -> bool {
+        match window_type {
+            AppWindowType::Main => {
+                if !self.windows.contains(&window_type) {
+                    self.windows.push(AppWindowType::Main);
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    pub fn remove_main_window(&mut self) {
+        self.windows.retain(|&w| w != AppWindowType::Main);
+    }
 }
 
 impl AppState {
@@ -125,6 +212,7 @@ impl AppState {
             torrent_client: ResourceState::Pending,
             server: ResourceState::Pending,
             client: ResourceState::Pending,
+            windows_state: AppWindowState::new(),
         }
     }
 }
@@ -161,44 +249,6 @@ impl App for AkarekoApp {
 struct Layout;
 impl Component for Layout {
     fn render(&self) -> impl IntoElement {
-        let radio = use_radio(AppChannel::Status);
-
-        fn render_status<T, E>(state: &ResourceState<T, E>) -> impl IntoElement {
-            match state {
-                ResourceState::Pending => "...",
-                ResourceState::Error(_) => "X",
-                ResourceState::Loaded(_) => "✓",
-                ResourceState::Loading => "⏳",
-            }
-        }
-
-        let status = rect().height(Size::Fill).children([
-            rect()
-                .horizontal()
-                .child("Repository")
-                .child(rect().width(Size::px(15.)))
-                .child(render_status(&radio.read().repositories))
-                .into(),
-            rect()
-                .horizontal()
-                .child("Torrent Client")
-                .child(rect().width(Size::px(15.)))
-                .child(render_status(&radio.read().torrent_client))
-                .into(),
-            rect()
-                .horizontal()
-                .child("Server")
-                .child(rect().width(Size::px(15.)))
-                .child(render_status(&radio.read().server))
-                .into(),
-            rect()
-                .horizontal()
-                .child("Client")
-                .child(rect().width(Size::px(15.)))
-                .child(render_status(&radio.read().client))
-                .into(),
-        ]);
-
         rect()
             .horizontal()
             .expanded()
@@ -219,7 +269,7 @@ impl Component for Layout {
                     )
                     .child(layout_button(Route::Home))
                     .child(layout_button(Route::MangaList))
-                    .child(status),
+                    .child(layout_button(Route::Config)),
             )
             .child(
                 rect()

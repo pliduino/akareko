@@ -3,8 +3,9 @@ use freya::{prelude::*, query::*, radio::use_radio, router::RouterContext};
 use crate::{
     db::index::tags::MangaTag,
     ui::{
-        DEFAULT_PAGE_PADDING, IndexComponent,
-        icons::PLUS_ICON,
+        DEFAULT_CORNER_RADIUS, DEFAULT_PAGE_PADDING, IndexComponent,
+        components::svg_button,
+        icons::{self, PLUS_ICON},
         queries::FetchIndexes,
         router::{Route, RouteContext},
     },
@@ -32,8 +33,19 @@ impl Component for MangaList {
             },
         };
 
+        let search_string = use_state(String::new);
+
+        let search_bar = Input::new(search_string)
+            .placeholder("Search")
+            .leading(svg_button(icons::CHECK_CIRCLE_ICON, 24., Color::BLACK))
+            .corner_radius(DEFAULT_CORNER_RADIUS)
+            .width(Size::Fill);
+
         rect()
+            .spacing(10.)
             .padding(DEFAULT_PAGE_PADDING)
+            .width(Size::Fill)
+            .child(search_bar)
             .child(
                 Button::new()
                     .child(svg(PLUS_ICON))

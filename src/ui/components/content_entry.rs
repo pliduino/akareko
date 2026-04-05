@@ -74,12 +74,14 @@ impl<I: IndexTag + VisualizeRoute<I>> Component for ContentEntry<I> {
                             ProgressBar::new(s.progress as f32 * 100.0).into_element(),
                             None,
                         ),
-                        anawt::TorrentState::Finished => {
-                            (rect().child("✓").into_element(), Some(open_file.into()))
-                        }
-                        anawt::TorrentState::Seeding => {
-                            (rect().child("✓").into_element(), Some(open_file.into()))
-                        }
+                        anawt::TorrentState::Finished => (
+                            svg_button(icons::CHECK_CIRCLE_ICON, 24., Color::WHITE).into_element(),
+                            Some(open_file.into()),
+                        ),
+                        anawt::TorrentState::Seeding => (
+                            svg_button(icons::CHECK_CIRCLE_ICON, 24., Color::WHITE).into_element(),
+                            Some(open_file.into()),
+                        ),
                         anawt::TorrentState::CheckingResumeData => (rect().into_element(), None),
                     },
                     None => {

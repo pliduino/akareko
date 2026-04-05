@@ -8,7 +8,7 @@ use freya::{
 use crate::{
     db::index::{Index, tags::MangaTag},
     ui::{
-        DEFAULT_CORNER_RADIUS, DEFAULT_PAGE_PADDING, Route, RouteContext,
+        DEFAULT_CORNER_RADIUS, DEFAULT_PAGE_PADDING, Route, RouteContext, UNKNOWN_COVER,
         components::{AkLayers, ContentEntry, Spacer, svg_button},
         icons::PLUS_ICON,
         queries::{FetchContents, UpdateContentProgress},
@@ -26,8 +26,6 @@ impl Component for Manga {
             FetchContents::<MangaTag>::new(),
         ));
 
-        let cover_holder: ImageSource = PathBuf::from("./assets/placeholder_cover.png").into();
-
         let title = label().text(self.index.title().clone()).font_size(24);
 
         let index = self.index.clone();
@@ -40,7 +38,7 @@ impl Component for Manga {
         let top = rect()
             .horizontal()
             .child(
-                ImageViewer::new(cover_holder)
+                ImageViewer::new(UNKNOWN_COVER)
                     .width(Size::px(400.))
                     .corner_radius(DEFAULT_CORNER_RADIUS),
             )

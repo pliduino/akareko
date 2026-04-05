@@ -10,6 +10,8 @@ use crate::{
     types::{PrivateKey, PublicKey, Timestamp},
 };
 
+pub const DEFAULT_SAM_PORT: u16 = 7656;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyPair {
     private_key: PrivateKey,
@@ -110,7 +112,7 @@ impl Default for AkarekoConfig {
     fn default() -> Self {
         Self {
             keypair: KeyPair::new(PrivateKey::new()),
-            sam_port: 7656,
+            sam_port: DEFAULT_SAM_PORT,
             eepsite_key: String::new(),
             eepsite_address: I2PAddress::new(""),
             dev_mode: false,
