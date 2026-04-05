@@ -14,7 +14,7 @@ use crate::{
 };
 
 pub enum Event {
-    ReloadConfig,
+    RemoveMainWindow,
 }
 
 enum LoadEvent {
@@ -119,7 +119,9 @@ impl AppManager {
             tokio::select! {
                 val = self.rx.recv() => {
                     match val.unwrap() {
-                        Event::ReloadConfig => todo!(),
+                        Event::RemoveMainWindow => {
+                            self.radio_station.write_channel(AppChannel::Window).windows_state.remove_main_window();
+                        },
                     }
                 }
                 val = self.load_rx.recv() => {

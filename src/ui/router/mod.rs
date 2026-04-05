@@ -6,6 +6,7 @@ use crate::db::index::tags::MangaTag;
 use crate::helpers::LiFo;
 use crate::types::{Hash, Signature};
 use crate::ui::Layout;
+use crate::ui::router::manga::Config;
 use freya::prelude::*;
 use freya::router::Routable;
 
@@ -21,6 +22,8 @@ mod manga {
     pub use add_manga_chapter::AddMangaChapter;
     mod chapter_viewer;
     pub use chapter_viewer::ChapterViewer;
+    mod config;
+    pub use config::Config;
 }
 
 use home::Home;
@@ -43,6 +46,7 @@ pub enum Route {
     AddMangaChapter { index: Index<MangaTag> },
     // #[route("/chapter/:signature")]
     ChapterViewer { content: Content<MangaTag> },
+    Config,
 }
 
 impl Route {
@@ -54,6 +58,7 @@ impl Route {
             Route::AddManga => "Add Manga",
             Route::AddMangaChapter { index } => "",
             Route::ChapterViewer { content } => "",
+            Route::Config => "Config",
         }
     }
 }
@@ -141,6 +146,7 @@ impl Component for Route {
                 content: content.clone(),
             }
             .into_element(),
+            Route::Config => Config.into_element(),
         }
     }
 }

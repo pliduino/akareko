@@ -2,41 +2,23 @@
 
 use std::path::PathBuf;
 
-use anawt::TorrentClient;
-use anawt::options::AnawtOptions;
 use clap::Parser;
-use freya::prelude::*;
-use freya::radio::RadioStation;
-use freya::tray::Icon;
-use freya::tray::TrayEvent;
-use freya::tray::TrayIconBuilder;
-use freya::tray::menu::Menu;
-use freya::tray::menu::MenuEvent;
-use freya::tray::menu::MenuItem;
-use futures::SinkExt;
-use futures::channel::mpsc;
+use freya::{
+    prelude::*,
+    radio::RadioStation,
+    tray::{
+        Icon, TrayEvent, TrayIconBuilder, TrayIconEvent,
+        menu::{Menu, MenuEvent, MenuItem},
+    },
+};
 use futures::executor::block_on;
-use rclite::Arc;
-use tokio::sync::RwLock;
-use tokio::task::JoinHandle;
-use tracing::error;
 use tracing::info;
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::Layer;
-use tracing_subscriber::fmt;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{EnvFilter, Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::config::AkarekoConfig;
-use crate::db::Repositories;
-use crate::server::AkarekoServer;
-use crate::server::client::AkarekoClient;
-use crate::server::client::pool::ClientPool;
-use crate::ui::AkarekoApp;
-use crate::ui::AppChannel;
-use crate::ui::AppState;
-use crate::ui::RouteContext;
-use crate::ui::app_manager::AppManager;
+use crate::ui::{
+    AkarekoApp, AppChannel, AppState, AppWindowType, RouteContext,
+    app_manager::{AppManager, Event},
+};
 
 // use crate::ui::AppState;
 
@@ -56,8 +38,12 @@ struct CliArgs {
 }
 
 fn main() -> Result<(), ()> {
+    let args = CliArgs::parse();
+
     // ==================== Tracing ====================
-    let format = time::format_description::parse(":[minute]:[second]").expect("Cataplum");
+    let borrowed_format_items =
+        time::format_description::parse(":[minute]:[second]").expect("Cataplum");
+    let format = borrowed_format_items;
 
     let timer = fmt::time::LocalTime::new(format);
     let filter = EnvFilter::builder().parse_lossy("none,akareko=trace,anawt=info");
@@ -75,16 +61,11 @@ fn main() -> Result<(), ()> {
 
     info!("Initializing Application...");
 
-    // iced::daemon(AppState::boot, AppState::update, AppState::view)
-    //     .subscription(AppState::subscription)
-    //     .theme(|s: &AppState, _| s.theme())
-    //     .run()
-    //     .unwrap();
-    //
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .unwrap();
+
     // Enter the Tokio context so its APIs (channels, timers, etc.) work.
     let _rt = rt.enter();
 
@@ -107,15 +88,47 @@ fn main() -> Result<(), ()> {
             .unwrap()
     };
 
-    let mut radio_station = RadioStation::<AppState, AppChannel>::create_global(AppState::new());
-    // let router = RouterContext::create_global::<ui::Route>(
-    //     RouterConfig::default().with_initial_path(Route::Home),
-    // );
+    let mut app_state = AppState::new();
+    if !args.minimized {
+        app_state.windows_state.try_add_window(AppWindowType::Main);
+    }
+    let mut radio_station = RadioStation::<AppState, AppChannel>::create_global(app_state);
+
     let router = RouteContext::create_global();
 
+    let (manager, manager_tx) = AppManager::new(radio_station);
+    let app = AkarekoApp::new(radio_station, router);
+
+    let manager_tx_tray = manager_tx.clone();
     let tray_handler = move |ev, mut ctx: RendererContext| match ev {
+        TrayEvent::Icon(TrayIconEvent::Click { .. }) => {
+            // TODO: Deduplicate code
+            let can_open_window = radio_station
+                .write_channel(AppChannel::Window)
+                .windows_state
+                .try_add_window(AppWindowType::Main);
+
+            if can_open_window {
+                let manager_tx = manager_tx_tray.clone();
+                ctx.launch_window(WindowConfig::new_app(app).with_on_close(move |_, _| {
+                    manager_tx.send(Event::RemoveMainWindow).unwrap();
+                    CloseDecision::Close
+                }));
+            }
+        }
         TrayEvent::Menu(MenuEvent { id }) if id == "open" => {
-            // ctx.launch_window(WindowConfig::new(app).with_size(500., 450.));
+            let can_open_window = radio_station
+                .write_channel(AppChannel::Window)
+                .windows_state
+                .try_add_window(AppWindowType::Main);
+
+            if can_open_window {
+                let manager_tx = manager_tx_tray.clone();
+                ctx.launch_window(WindowConfig::new_app(app).with_on_close(move |_, _| {
+                    manager_tx.send(Event::RemoveMainWindow).unwrap();
+                    CloseDecision::Close
+                }));
+            }
         }
         TrayEvent::Menu(MenuEvent { id }) if id == "quit" => {
             match &radio_station.peek().torrent_client {
@@ -128,18 +141,20 @@ fn main() -> Result<(), ()> {
         }
         _ => {}
     };
+    let mut launch_config = LaunchConfig::new()
+        .with_tray(tray_icon, tray_handler)
+        .with_future(async move |_| manager.run_manager().await)
+        .with_exit_on_close(false);
 
-    let (manager, manager_tx) = AppManager::new(radio_station);
+    if !args.minimized {
+        launch_config =
+            launch_config.with_window(WindowConfig::new_app(app).with_on_close(move |_, _| {
+                manager_tx.send(Event::RemoveMainWindow).unwrap();
+                CloseDecision::Close
+            }));
+    }
 
-    launch(
-        LaunchConfig::new()
-            .with_tray(tray_icon, tray_handler)
-            .with_future(async move |_| manager.run_manager().await)
-            .with_window(WindowConfig::new_app(AkarekoApp::new(
-                radio_station,
-                router,
-            ))),
-    );
+    launch(launch_config);
 
     Ok(())
 }
