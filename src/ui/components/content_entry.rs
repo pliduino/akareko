@@ -122,8 +122,6 @@ impl<I: IndexTag + VisualizeRoute<I>> Component for ContentEntry<I> {
 
         let progress = self.content.calculate_progress();
 
-        trace!("Progress: {}", progress);
-
         let first_line = rect()
             .horizontal()
             .content(freya::prelude::Content::Flex)

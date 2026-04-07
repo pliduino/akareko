@@ -16,7 +16,11 @@ use crate::{
         content::Content,
         tags::{IndexTag, MangaTag},
     },
-    ui::{AppChannel, ResourceState, components::AkLayers, queries::UpdateContentCount},
+    ui::{
+        AppChannel, ResourceState,
+        components::AkLayers,
+        queries::{UpdateContentCount, UpdateContentProgress},
+    },
 };
 
 #[derive(PartialEq)]
@@ -30,11 +34,22 @@ impl Component for ChapterViewer {
         let mut show_sidebar = use_state(|| true);
 
         let count_mutation = use_mutation(Mutation::new(UpdateContentCount::<MangaTag>::new()));
+        let progress_mutation =
+            use_mutation(Mutation::new(UpdateContentProgress::<MangaTag>::new()));
 
         image_loader(&self.content, images, count_mutation);
         let mut config = use_radio(AppChannel::Config);
 
         let mut scroll_controller = use_scroll_controller(ScrollConfig::default);
+
+        let signature = self.content.signature().clone();
+        let prog = self.content.progress;
+        use_side_effect(move || {
+            let cur_page = cur_page();
+            if cur_page > prog {
+                progress_mutation.mutate((signature.clone(), cur_page + 1));
+            };
+        });
 
         let mut back_page = move || {
             let mut cur_page = cur_page.write();
@@ -45,7 +60,7 @@ impl Component for ChapterViewer {
         };
         let mut forward_page = move || {
             let mut cur_page = cur_page.write();
-            let total_pages: usize = images.read().len();
+            let total_pages: u32 = images.read().len() as u32;
             if *cur_page + 1 < total_pages {
                 *cur_page += 1;
                 scroll_controller.scroll_to(ScrollPosition::Start, Direction::Vertical);
@@ -131,7 +146,7 @@ impl Component for ChapterViewer {
             .horizontal()
             .min_height(Size::Fill)
             .width(Size::Fill)
-            .child(match images.read().get(*cur_page.read()) {
+            .child(match images.read().get(*cur_page.read() as usize) {
                 Some(Some(img)) => image(img.clone())
                     .height(Size::px(img.image.borrow().height() as f32 * zoom))
                     .into_element(),
@@ -261,6 +276,7 @@ fn image_loader<I: IndexTag>(
                         bytes,
                     });
                 }
+                return;
             }
 
             if let Some(extension) = path.extension() {
@@ -272,6 +288,7 @@ fn image_loader<I: IndexTag>(
                     let total_images = zip.file().entries().len();
 
                     *images.write() = vec![None; total_images];
+                    count_mutation.mutate((signature, total_images as u32));
 
                     // Add priority system so files near the current
                     // page are loaded first

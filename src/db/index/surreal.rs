@@ -1,6 +1,7 @@
 use fastbloom::BloomFilter;
 use surrealdb::{Surreal, engine::local::Db, types::RecordId};
 use surrealdb_types::Value;
+use tracing::trace;
 
 use crate::{
     db::{
