@@ -227,12 +227,10 @@ impl<'a> IndexRepository<'a> {
 
         let mut query = self.db.query(query_str).bind(("index_hash", index_hash));
 
-        dbg!("Querying");
-
         if let Some(timestamp) = timestamp {
             query = query.bind(("timestamp", timestamp));
         }
-
+        dbg!("Querying");
         let results: Vec<Content<T>> = query.await?.take(0)?;
         dbg!("Results");
 

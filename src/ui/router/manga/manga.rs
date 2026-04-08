@@ -38,31 +38,41 @@ impl Component for Manga {
             });
         };
 
-        let follow_button = match &*bookmark_query.read().state() {
-            QueryStateData::Pending => CircularLoader::new().into_element(),
-            QueryStateData::Loading { .. } => CircularLoader::new().into_element(),
+        let (bookmark_icon, bookmark_action): (
+            Element,
+            Option<EventHandler<Event<PressEventData>>>,
+        ) = match &*bookmark_query.read().state() {
+            QueryStateData::Pending => (CircularLoader::new().into_element(), None),
+            QueryStateData::Loading { .. } => (CircularLoader::new().into_element(), None),
             QueryStateData::Settled { res, .. } => match res {
                 Ok(Some(_)) => {
                     let index_hash = self.index.hash().clone();
-                    Button::new()
-                        .child(svg(icons::BOOKMARK_SIMPLE_FILL))
-                        .on_press(move |_| {
+
+                    (
+                        svg(icons::BOOKMARK_SIMPLE_FILL).into_element(),
+                        Some(EventHandler::new(move |_: Event<PressEventData>| {
                             bookmark_mut.mutate((index_hash.clone(), false));
-                        })
-                        .into_element()
+                        })),
+                    )
                 }
                 Ok(None) => {
                     let index_hash = self.index.hash().clone();
-                    Button::new()
-                        .child(svg(icons::BOOKMARK_SIMPLE))
-                        .on_press(move |_| {
+                    (
+                        svg(icons::BOOKMARK_SIMPLE).into_element(),
+                        Some(EventHandler::new(move |_: Event<PressEventData>| {
                             bookmark_mut.mutate((index_hash.clone(), true));
-                        })
-                        .into_element()
+                        })),
+                    )
                 }
-                Err(_) => "X".into_element(),
+                Err(_) => (CircularLoader::new().into_element(), None),
             },
         };
+
+        let follow_button = Button::new()
+            .child(bookmark_icon)
+            .maybe(bookmark_action.is_some(), |el| {
+                el.on_press(bookmark_action.unwrap())
+            });
 
         let add_chapter_button =
             svg_button(icons::PLUS_ICON, 32., Color::BLACK).on_press(add_chapter_press);
