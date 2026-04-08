@@ -45,7 +45,7 @@ impl Component for Manga {
                 Ok(Some(_)) => {
                     let index_hash = self.index.hash().clone();
                     Button::new()
-                        .child(svg(icons::BOOK_BOOKMARK_ICON))
+                        .child(svg(icons::BOOKMARK_SIMPLE_FILL))
                         .on_press(move |_| {
                             bookmark_mut.mutate((index_hash.clone(), false));
                         })
@@ -54,9 +54,9 @@ impl Component for Manga {
                 Ok(None) => {
                     let index_hash = self.index.hash().clone();
                     Button::new()
-                        .child(svg(icons::BOOK_BOOKMARK_ICON))
+                        .child(svg(icons::BOOKMARK_SIMPLE))
                         .on_press(move |_| {
-                            bookmark_mut.mutate((index_hash.clone(), false));
+                            bookmark_mut.mutate((index_hash.clone(), true));
                         })
                         .into_element()
                 }

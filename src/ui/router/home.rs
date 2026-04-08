@@ -1,4 +1,4 @@
-use crate::ui::{AppChannel, DEFAULT_CORNER_RADIUS, DEFAULT_PAGE_PADDING, ResourceState};
+use crate::ui::{AppChannel, DEFAULT_CORNER_RADIUS, DEFAULT_PAGE_PADDING, ResourceState, icons};
 use freya::{prelude::*, radio::use_radio};
 
 #[derive(PartialEq)]
@@ -9,10 +9,30 @@ impl Component for Home {
 
         fn render_status<T, E>(name: &'static str, state: &ResourceState<T, E>) -> Element {
             let icon = match state {
-                ResourceState::Pending => "...",
-                ResourceState::Error(_) => "X",
-                ResourceState::Loaded(_) => "✓",
-                ResourceState::Loading => "⏳",
+                ResourceState::Pending => svg(icons::CIRCLE)
+                    .fill(Color::LIGHT_GRAY)
+                    .stroke_width(12.)
+                    .stroke(Color::BLACK)
+                    .height(Size::px(12.))
+                    .into_element(),
+                ResourceState::Error(_) => svg(icons::CIRCLE)
+                    .fill(Color::RED)
+                    .stroke_width(12.)
+                    .stroke(Color::BLACK)
+                    .height(Size::px(12.))
+                    .into_element(),
+                ResourceState::Loaded(_) => svg(icons::CIRCLE)
+                    .fill(Color::GREEN)
+                    .stroke_width(12.)
+                    .stroke(Color::BLACK)
+                    .height(Size::px(12.))
+                    .into_element(),
+                ResourceState::Loading => svg(icons::CIRCLE)
+                    .fill(Color::YELLOW)
+                    .stroke_width(12.)
+                    .stroke(Color::BLACK)
+                    .height(Size::px(12.))
+                    .into_element(),
             };
 
             rect()
@@ -21,7 +41,7 @@ impl Component for Home {
                 .cross_align(Alignment::Center)
                 .padding(10.)
                 .child(label().text(name).width(Size::flex(1.)))
-                .child(label().text(icon))
+                .child(icon)
                 .into_element()
         }
 
