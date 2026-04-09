@@ -191,7 +191,7 @@ fn derive_byteable_enum(
 
                 match variant {
                     #(#decode_match_arms)*
-                    other => Err(DecodeError::InvalidEnumVariant {
+                    other => Err(crate::errors::DecodeError::InvalidEnumVariant {
                         variant_value: other.to_string(),
                         enum_name: stringify!(#name),
                     }),
