@@ -57,8 +57,16 @@ impl Component for TorrentEntry {
         let status = self.watcher.borrow().clone();
 
         rect()
-            .horizontal()
+            .vertical()
             .child(status.name)
+            .child(
+                rect().horizontal().child(
+                    label()
+                        .text(status.save_path)
+                        .font_size(11.)
+                        .color(Color::LIGHT_GRAY),
+                ),
+            )
             .child(ProgressBar::new(status.progress as f32 * 100.).show_progress(false))
             .width(Size::Fill)
     }
