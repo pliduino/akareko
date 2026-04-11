@@ -222,7 +222,7 @@ impl App for AkarekoApp {
             provide_context_for_scope_id(ctx.clone(), ScopeId::ROOT);
             ctx
         });
-        use_init_theme(|| dark_theme());
+        use_init_theme(|| light_theme());
         Layout
     }
 }
