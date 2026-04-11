@@ -230,9 +230,7 @@ impl<'a> IndexRepository<'a> {
         if let Some(timestamp) = timestamp {
             query = query.bind(("timestamp", timestamp));
         }
-        dbg!("Querying");
         let results: Vec<Content<T>> = query.await?.take(0)?;
-        dbg!("Results");
 
         let contents = match filter {
             Some(filter) => results

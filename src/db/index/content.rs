@@ -1,4 +1,5 @@
 use surrealdb_types::SurrealValue;
+use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 use crate::{
     db::{Magnet, ToBytes, index::tags::IndexTag},
@@ -6,6 +7,32 @@ use crate::{
 };
 
 // ==================== End Imports ====================
+
+#[derive(Debug, Default, Clone, SurrealValue, byteable_derive::Byteable)]
+pub enum ContentStatus {
+    Completed,
+    Hiatus,
+    Cancelled,
+    Releasing,
+    #[default]
+    Unknown,
+}
+
+#[derive(Debug, Clone, SurrealValue, byteable_derive::Byteable)]
+pub struct ContentLink {
+    /// Example: MyAnimeList, AniList
+    pub source: String,
+    pub link: String,
+
+    pub author: String,
+    pub artist: String,
+}
+
+#[derive(Debug, Default, Clone, SurrealValue, byteable_derive::Byteable)]
+pub struct ContentMetadata {
+    pub status: ContentStatus,
+    pub out_links: Vec<ContentLink>,
+}
 
 #[derive(Debug, Clone, SurrealValue, byteable_derive::Byteable)]
 pub struct Content<T: IndexTag> {
@@ -28,6 +55,7 @@ pub struct Content<T: IndexTag> {
     /// the last one.
     pub end: Option<f32>,
 
+    pub metadata: Option<ContentMetadata>,
     pub extra_metadata: T::ExtraMetadata,
 
     /// Each tag will use this differently, videos will count seconds, comics
@@ -40,7 +68,6 @@ pub struct Content<T: IndexTag> {
     #[byteable(skip)]
     pub count: u32,
 }
-
 impl<I: IndexTag> PartialEq for Content<I> {
     fn eq(&self, other: &Self) -> bool {
         self.signature() == other.signature()
@@ -76,6 +103,7 @@ impl<T: IndexTag> Content<T> {
             title,
             enumeration,
             end,
+            metadata: Default::default(),
             extra_metadata,
             progress: 0,
             count: 1,
