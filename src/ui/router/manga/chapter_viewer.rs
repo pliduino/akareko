@@ -12,6 +12,7 @@ use tokio::{fs::File, io::BufReader};
 use tracing::error;
 
 use crate::{
+    config::ImageVisualizationType,
     db::index::{
         content::Content,
         tags::{IndexTag, MangaTag},
@@ -85,9 +86,9 @@ impl Component for ChapterViewer {
                         .image_viewer_preferences()
                         .visualization_type
                     {
-                        crate::config::ImageVisualizationType::LeftToRight => back_page(),
-                        crate::config::ImageVisualizationType::RightToLeft => forward_page(),
-                        crate::config::ImageVisualizationType::Scroll => todo!(),
+                        ImageVisualizationType::LeftToRight => back_page(),
+                        ImageVisualizationType::RightToLeft => forward_page(),
+                        ImageVisualizationType::Scroll => todo!(),
                     }
                 }
                 Code::ArrowRight => {
@@ -99,24 +100,20 @@ impl Component for ChapterViewer {
                         .image_viewer_preferences()
                         .visualization_type
                     {
-                        crate::config::ImageVisualizationType::LeftToRight => forward_page(),
-                        crate::config::ImageVisualizationType::RightToLeft => back_page(),
-                        crate::config::ImageVisualizationType::Scroll => todo!(),
+                        ImageVisualizationType::LeftToRight => forward_page(),
+                        ImageVisualizationType::RightToLeft => back_page(),
+                        ImageVisualizationType::Scroll => todo!(),
                     }
                 }
                 Code::ArrowDown => {
                     // e.stop_propagation();
+                    // let (_, y) = scroll_controller.into();
+                    // scroll_controller.scroll_to_y(y - 50);
                 }
                 Code::ArrowUp => {
                     // e.stop_propagation();
-                }
-                Code::PageUp => {
-                    e.stop_propagation();
-                    scroll_controller.scroll_to(ScrollPosition::Start, Direction::Vertical);
-                }
-                Code::PageDown => {
-                    e.stop_propagation();
-                    scroll_controller.scroll_to(ScrollPosition::End, Direction::Vertical);
+                    // let (_, y) = scroll_controller.into();
+                    // scroll_controller.scroll_to_y(y + 50);
                 }
                 Code::Equal if e.modifiers.ctrl() => {
                     e.stop_propagation();
@@ -188,7 +185,8 @@ impl Component for ChapterViewer {
                     e.stop_propagation();
                     back_page();
                 };
-            });
+            })
+            .a11y_focusable(Focusable::Disabled);
 
         let click_area_center = rect()
             .height(Size::Fill)
@@ -199,7 +197,8 @@ impl Component for ChapterViewer {
                     let mut show_sidebar = show_sidebar.write();
                     *show_sidebar = !*show_sidebar;
                 };
-            });
+            })
+            .a11y_focusable(Focusable::Disabled);
 
         let click_area_right = rect()
             .height(Size::Fill)
@@ -209,7 +208,8 @@ impl Component for ChapterViewer {
                     e.stop_propagation();
                     forward_page();
                 };
-            });
+            })
+            .a11y_focusable(Focusable::Disabled);
 
         let click_areas = rect()
             .height(Size::percent(100.))
@@ -219,7 +219,8 @@ impl Component for ChapterViewer {
             .position(Position::new_absolute())
             .child(click_area_left)
             .child(click_area_center)
-            .child(click_area_right);
+            .child(click_area_right)
+            .a11y_focusable(Focusable::Disabled);
 
         rect()
             .width(Size::Fill)

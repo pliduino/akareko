@@ -63,6 +63,14 @@ pub struct AkarekoConfig {
     scheduler_config: SchedulerConfig,
 
     is_relay: bool,
+
+    word_filter: WordFilter,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum WordFilter {
+    None,
+    Regex,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -123,6 +131,7 @@ impl Default for AkarekoConfig {
             max_client_connections: 8,
             scheduler_config: SchedulerConfig::default(),
             image_viewer_preferences: ImageViewerPreferences::default(),
+            word_filter: WordFilter::None,
         }
     }
 }

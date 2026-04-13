@@ -23,5 +23,13 @@ icon!(
 );
 icon!(ARROW_LEFT_ICON, "../../assets/icons/arrow-left.svg");
 icon!(ARROW_RIGHT_ICON, "../../assets/icons/arrow-right.svg");
+icon!(
+    ARROW_CIRCLE_DOWN_ICON,
+    "../../assets/icons/arrow-circle-down.svg"
+);
+icon!(
+    ARROW_CIRCLE_UP_ICON,
+    "../../assets/icons/arrow-circle-up.svg"
+);
 icon!(PLUS_ICON, "../../assets/icons/plus.svg");
 icon!(CIRCLE, "../../assets/icons/circle-fill.svg");

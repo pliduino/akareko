@@ -276,7 +276,7 @@ dependencies = [
 [[package]]
 name = "anawt"
 version = "0.1.1"
-source = "git+https://github.com/pliduino/anawt.git?branch=develop#f336e8a70c80553a47942e3449ac1a37f9b96f1f"
+source = "git+https://github.com/zko-jin/anawt.git?branch=develop#8d171c37d8c868cc311f7cbb9b84aedee0402ab2"
 dependencies = [
  "error_set",
  "lt-rs",
@@ -4831,7 +4831,7 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 [[package]]
 name = "lt-rs"
 version = "0.1.4"
-source = "git+https://github.com/pliduino/lt-rs?branch=master#0a8f2caeecf402baa87e08856a8049e7cc7acb17"
+source = "git+https://github.com/zko-jin/lt-rs?branch=master#a3b14560ef9e69a4b6b3f19557d579a82d7bd4c1"
 dependencies = [
  "base64",
  "bitflags 2.11.0",
