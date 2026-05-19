@@ -1,4 +1,5 @@
 use fastbloom::BloomFilter;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     db::{comments::Post, user::I2PAddress},
@@ -30,12 +31,12 @@ impl AkarekoProtocolCommand for GetPostsByTopic {
     }
 }
 
-#[derive(byteable_derive::Byteable)]
+#[derive(Serialize, Deserialize)]
 pub struct GetPostsByTopicRequest {
     pub topic: Topic,
     pub timestamp: Option<Timestamp>,
     pub filter: Option<BloomFilter>,
 }
 
-#[derive(byteable_derive::Byteable)]
+#[derive(Serialize, Deserialize)]
 pub struct GetPostsByTopicResponse {}

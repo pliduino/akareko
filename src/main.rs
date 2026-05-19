@@ -1,8 +1,10 @@
-#![allow(dead_code)]
+#![feature(negative_impls)]
+#![feature(auto_traits)]
 
 use std::path::PathBuf;
 
 use clap::Parser;
+use emissary_util::{runtime::tokio::Runtime, storage::Storage};
 use freya::{
     prelude::*,
     radio::RadioStation,
@@ -19,8 +21,6 @@ use crate::ui::{
     AkarekoApp, AppChannel, AppState, AppWindowType, RouteContext,
     app_manager::{AppManager, Event},
 };
-
-// use crate::ui::AppState;
 
 mod clients;
 mod config;

@@ -1,22 +1,28 @@
-use std::marker::PhantomData;
-
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use surrealdb_types::SurrealValue;
 
 use crate::{
     db::{Magnet, ToBytes, index::tags::IndexTag},
-    helpers::Byteable,
     types::{Hash, PrivateKey, PublicKey, Signature, Timestamp},
 };
 
 // ==================== End Imports ====================
 
-pub trait ContentType<I: IndexTag>: PartialEq + Eq + 'static {
-    type SourceType: std::fmt::Debug + Clone + SurrealValue + Byteable + ToBytes + PartialEq;
+pub trait ContentType<I: IndexTag>:
+    PartialEq + Serialize + DeserializeOwned + Eq + 'static
+{
+    type SourceType: std::fmt::Debug
+        + Clone
+        + SurrealValue
+        + Serialize
+        + DeserializeOwned
+        + ToBytes
+        + PartialEq;
 }
 
-#[derive(Debug, Clone, SurrealValue, byteable_derive::Byteable, PartialEq, Eq)]
+#[derive(Debug, Clone, SurrealValue, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InternalContent;
-#[derive(Debug, Clone, SurrealValue, byteable_derive::Byteable, PartialEq, Eq)]
+#[derive(Debug, Clone, SurrealValue, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ExternalContent;
 
 impl<I: IndexTag> ContentType<I> for InternalContent {
@@ -27,7 +33,7 @@ impl<I: IndexTag> ContentType<I> for ExternalContent {
     type SourceType = I::ExternalSourceType;
 }
 
-#[derive(Debug, Clone, SurrealValue, byteable_derive::Byteable)]
+#[derive(Debug, Clone, SurrealValue, Serialize, Deserialize)]
 pub struct Content<T: IndexTag, S: ContentType<T> = InternalContent> {
     #[surreal(rename = "id")]
     signature: Signature,
@@ -53,11 +59,11 @@ pub struct Content<T: IndexTag, S: ContentType<T> = InternalContent> {
     /// Each tag will use this differently, videos will count seconds, comics
     /// will count pages, etc.
     /// If count is 0 any progress above 0 will be considered as fully seen.
-    #[byteable(skip)]
+    #[serde(skip)]
     pub progress: u32,
     /// Max progress, by default it's set to 1 and will be update whenever you
     /// open the content.
-    #[byteable(skip)]
+    #[serde(skip)]
     pub count: u32,
 }
 impl<I: IndexTag, S: ContentType<I>> PartialEq for Content<I, S> {

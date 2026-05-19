@@ -1,4 +1,10 @@
 use anawt::{TorrentClient, options::AnawtOptions};
+use emissary_core::{Config, Ntcp2Config, SamConfig, Ssu2Config, TransitConfig, router::Router};
+use emissary_util::{
+    reseeder::Reseeder,
+    runtime::tokio::Runtime,
+    storage::{Storage, StorageBundle},
+};
 use freya::radio::RadioStation;
 use tokio::sync::RwLock;
 use tracing::error;
@@ -35,6 +41,94 @@ impl AppManager {
         let config = AkarekoConfig::load().await;
         self.radio_station.write_channel(AppChannel::Config).config =
             ResourceState::Loaded(config.clone());
+
+        let storage = Storage::new::<Runtime>(None).await.unwrap();
+        let StorageBundle {
+            ntcp2_iv,
+            ntcp2_key,
+            profiles,
+            router_info,
+            mut routers,
+            signing_key,
+            static_key,
+            ssu2_intro_key,
+            ssu2_static_key,
+        } = storage.load().await;
+
+        if routers.is_empty() {
+            match Reseeder::reseed::<Runtime>(None, false).await {
+                Ok(reseed_routers) => {
+                    for info in reseed_routers {
+                        let _ = storage
+                            .store_router_info(info.name.to_string(), info.router_info.clone())
+                            .await;
+                        routers.push(info.router_info);
+                    }
+                }
+
+                Err(error) => tracing::error!(
+                    num_routers = routers.len(),
+                    ?error,
+                    "failed to reseed router",
+                ),
+            }
+        }
+
+        let i2p_router_config = Config {
+            ntcp2: Some(Ntcp2Config {
+                port: 25515,
+                key: ntcp2_key,
+                iv: ntcp2_iv,
+                publish: true,
+                ipv4_host: None,
+                ipv6_host: None,
+                ipv4: true,
+                ipv6: true,
+                ml_kem: Some(4),
+                disable_pq: false,
+            }),
+            ssu2: Some(Ssu2Config {
+                intro_key: ssu2_intro_key,
+                static_key: ssu2_static_key,
+                ipv4: true,
+                ipv4_host: None,
+                ipv6: true,
+                ipv6_host: None,
+                port: 25515,
+                publish: true,
+                ipv4_mtu: None,
+                ipv6_mtu: None,
+                disable_pq: false,
+                ml_kem: Some("4".to_string()),
+            }),
+            samv3_config: Some(SamConfig {
+                tcp_port: config.sam_port(),
+                udp_port: config.sam_port(),
+                host: "127.0.0.1".to_string(),
+            }),
+            routers,
+            profiles,
+            router_info,
+            static_key: Some(static_key),
+            signing_key: Some(signing_key),
+            transit: Some(TransitConfig {
+                max_tunnels: Some(1000),
+            }),
+            ..Config::default()
+        };
+
+        let (router, _events, router_info) = Router::<Runtime>::new(
+            i2p_router_config,
+            None,
+            Some(std::sync::Arc::new(storage.clone())),
+        )
+        .await
+        .map_err(|error| panic!("failed to start router: {error}"))
+        .unwrap();
+
+        tokio::spawn(router);
+
+        storage.store_local_router_info(router_info).await.unwrap();
 
         self.radio_station
             .write_channel(AppChannel::TorrentClient)

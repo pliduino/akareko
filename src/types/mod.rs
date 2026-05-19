@@ -1,8 +1,6 @@
 use std::{fmt::Display, str::FromStr};
 
 use base64::{Engine as _, prelude::BASE64_URL_SAFE_NO_PAD};
-#[cfg(feature = "diesel")]
-use diesel::{deserialize::FromSqlRow, expression::AsExpression};
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
 
@@ -15,22 +13,10 @@ mod string;
 mod timestamp;
 mod topic;
 pub use keys::{PrivateKey, PublicKey, Signable, Signature};
-pub use string::*;
 pub use timestamp::Timestamp;
 pub use topic::Topic;
 
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    // AsExpression,
-    // FromSqlRow,
-    byteable_derive::Byteable,
-)]
-// #[sql_type = "diesel::sql_types::Binary"]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hash(#[serde(with = "serde_bytes")] [u8; 64]);
 
 impl FromStr for Hash {
@@ -38,36 +24,6 @@ impl FromStr for Hash {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Hash::from_base64(s)
-    }
-}
-
-#[cfg(feature = "sqlite")]
-pub mod sqlite {
-    use diesel::{
-        deserialize::FromSql,
-        serialize::{self, IsNull, Output, ToSql},
-        sql_types::Binary,
-        sqlite::{Sqlite, SqliteValue},
-    };
-
-    use crate::hash::Hash;
-
-    impl FromSql<Binary, Sqlite> for Hash {
-        fn from_sql(bytes: SqliteValue) -> diesel::deserialize::Result<Hash> {
-            let value = match <Vec<u8> as FromSql<Binary, Sqlite>>::from_sql(bytes)?.try_into() {
-                Ok(value) => value,
-                Err(e) => return Err(format!("Invalid hash size").into()),
-            };
-
-            Ok(Hash(value))
-        }
-    }
-
-    impl ToSql<Binary, Sqlite> for Hash {
-        fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Sqlite>) -> serialize::Result {
-            out.set_value(&self.0[..]);
-            Ok(IsNull::No)
-        }
     }
 }
 
@@ -83,7 +39,6 @@ impl SurrealValue for Hash {
     }
 
     fn into_value(self) -> surrealdb_types::Value {
-        // surrealdb_types::Value::Bytes(Bytes::from(bytes::Bytes::from_owner(self)))
         surrealdb_types::Value::String(self.as_base64())
     }
 

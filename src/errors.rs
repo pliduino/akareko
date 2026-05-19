@@ -1,8 +1,7 @@
-#![allow(unused_variables)]
-
 use std::string::FromUtf8Error;
 
 use anawt::errors::LtrsError;
+use skerry::skerry_global;
 
 use crate::server::protocol::AkarekoStatus;
 
@@ -50,16 +49,17 @@ error_set::error_set! {
     //     DieselError(diesel::result::Error)
     // }
 
-    DatabaseError := {Unknown, NotInitialized} || SurrealError /*|| DieselError */
-
+    DatabaseError := {Unknown, NotInitialized} || SurrealError /*||
+DieselError */
     ServerError := { RelayNotEnabled } || YosemiteError || IoError
 
     InvalidSignature := {
         InvalidSignature
     }
 
-    ClientError := { MissingPayload, UnexpectedResponseCode { status: AkarekoStatus } } || EncodeError
-            || DecodeError || YosemiteError || InvalidSignature || DatabaseError
+    ClientError := { MissingPayload, UnexpectedResponseCode { status:
+AkarekoStatus } } || EncodeError             || DecodeError || YosemiteError
+|| InvalidSignature || DatabaseError
 
     EncodeError := {
         InvalidData,
@@ -89,4 +89,35 @@ impl serde::de::Error for DecodeError {
     fn custom<T: std::fmt::Display>(msg: T) -> Self {
         DecodeError::InvalidData
     }
+}
+
+#[skerry_global]
+pub enum AkarekoErrors {
+    #[from]
+    InvalidBase64(base64::DecodeError),
+    Base64WrongLength {
+        expected: usize,
+        actual: usize,
+    },
+    #[from]
+    TomlDe(toml::de::Error),
+    #[from]
+    TomlSer(toml::ser::Error),
+    #[from]
+    FromUtf8(FromUtf8Error),
+    // #[from]
+    // StdIo(std::io::Error),
+    #[from]
+    TokioIo(tokio::io::Error),
+    // ==================== Validation ====================
+    InvalidSignature,
+    // ==================== Networking ====================
+    #[from]
+    Yosemite(yosemite::Error),
+    #[from]
+    MangadexApi(mangadex_api::error::Error),
+    // ==================== Database ====================
+    #[from]
+    Surreal(surrealdb::Error),
+    DatabaseNotInitialized,
 }

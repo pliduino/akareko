@@ -1,4 +1,5 @@
 use base64::{Engine as _, prelude::BASE64_STANDARD_NO_PAD};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     db::{
@@ -9,8 +10,8 @@ use crate::{
     types::{Hash, Signature},
 };
 
-#[derive(Clone, Debug, PartialEq, std::hash::Hash, Eq, byteable_derive::Byteable)]
-pub struct Topic([u8; 64]);
+#[derive(Clone, Debug, PartialEq, std::hash::Hash, Eq, Serialize, Deserialize)]
+pub struct Topic(#[serde(with = "serde_bytes")] [u8; 64]);
 
 impl AsRef<[u8]> for Topic {
     fn as_ref(&self) -> &[u8] {

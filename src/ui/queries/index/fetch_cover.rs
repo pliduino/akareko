@@ -4,7 +4,6 @@ use freya::{
     elements::image::ImageHolder, prelude::try_consume_root_context, query::QueryCapability,
     radio::RadioStation,
 };
-use mangadex_api::utils::download::chapter::DownloadMode;
 
 use crate::{
     config::MetadataSource,

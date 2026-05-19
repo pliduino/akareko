@@ -1,26 +1,17 @@
-use std::{cell::RefCell, rc::Rc};
-
-use freya::{
-    elements::image::ImageHolder, prelude::try_consume_root_context, query::QueryCapability,
-    radio::RadioStation,
-};
-use mangadex_api::utils::download::chapter::DownloadMode;
+use freya::query::QueryCapability;
 use mangadex_api_types_rust::{IncludeExternalUrl, IncludeUnvailable};
 use uuid::Uuid;
 
 use crate::{
-    config::MetadataSource,
     db::{
         Magnet,
         index::{
-            IndexLinks,
             content::{Content, ExternalContent},
             tags::{ChapterExternalSource, MangaChapter, MangaTag},
         },
     },
     helpers::Language,
     types::{Hash, PublicKey, Signature, Timestamp},
-    ui::{AppChannel, AppState},
 };
 
 #[derive(Clone, PartialEq, Eq, Hash)]

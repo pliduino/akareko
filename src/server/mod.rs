@@ -9,7 +9,7 @@ use crate::{
     config::AkarekoConfig,
     db::Repositories,
     errors::{DecodeError, ServerError},
-    helpers::{Byteable, b32_from_pub_b64},
+    helpers::{AkarekoRead as _, b32_from_pub_b64},
     server::protocol::AkarekoProtocolVersion,
 };
 

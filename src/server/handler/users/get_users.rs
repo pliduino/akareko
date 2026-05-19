@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{
     db::user::{I2PAddress, User},
     server::{ServerState, handler::AkarekoProtocolCommand, protocol::AkarekoProtocolResponse},
@@ -29,12 +31,12 @@ impl AkarekoProtocolCommand for GetUsers {
     }
 }
 
-#[derive(Debug, byteable_derive::Byteable)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct GetUsersRequest {
     pub pub_keys: Vec<PublicKey>,
 }
 
-#[derive(Debug, byteable_derive::Byteable)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct GetUsersResponse {
     pub users: Vec<User>,
 }

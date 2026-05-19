@@ -4,19 +4,7 @@ use surrealdb_types::{ConversionError, Number, SurrealValue, Value};
 
 use crate::db::ToBytes;
 
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    byteable_derive::Byteable,
-    Serialize,
-    Deserialize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[repr(transparent)]
 pub struct Timestamp(i64);
 

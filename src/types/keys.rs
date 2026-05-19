@@ -4,10 +4,6 @@ use std::str::FromStr;
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD};
 
-#[cfg(feature = "diesel")]
-use ::diesel::deserialize::FromSqlRow;
-#[cfg(feature = "diesel")]
-use diesel::expression::AsExpression;
 use ed25519_dalek::{SigningKey, ed25519::signature::SignerMut};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -20,13 +16,8 @@ use crate::errors::Base64Error;
 #[serde(transparent)]
 pub struct PrivateKey(#[serde(with = "serde_bytes")] [u8; 32]);
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, byteable_derive::Byteable)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(transparent)]
-#[cfg_attr(
-    feature = "diesel",
-    sql_type = "diesel::sql_types::Binary",
-    derive(FromSqlRow, AsExpression)
-)]
 pub struct PublicKey(#[serde(with = "serde_bytes")] pub(super) [u8; 32]);
 
 impl AsRef<[u8]> for PublicKey {
@@ -41,7 +32,6 @@ impl SurrealValue for PublicKey {
     }
 
     fn into_value(self) -> surrealdb::types::Value {
-        // surrealdb::types::Value::Bytes(bytes::Bytes::from_owner(self).into())
         surrealdb::types::Value::String(self.to_base64())
     }
 
@@ -92,61 +82,8 @@ impl SurrealValue for PublicKey {
     }
 }
 
-#[derive(Debug, Hash, Clone, PartialEq, Eq, byteable_derive::Byteable)]
-#[cfg_attr(
-    feature = "diesel",
-    sql_type = "diesel::sql_types::Binary",
-    derive(FromSqlRow, AsExpression)
-)]
-pub struct Signature(pub(super) [u8; 64]);
-
-#[cfg(feature = "sqlite")]
-pub mod sqlite {
-    use diesel::{
-        deserialize::FromSql,
-        serialize::{self, IsNull, Output, ToSql},
-        sql_types::Binary,
-        sqlite::{Sqlite, SqliteValue},
-    };
-
-    use crate::hash::{PublicKey, Signature};
-
-    impl FromSql<Binary, Sqlite> for Signature {
-        fn from_sql(bytes: SqliteValue) -> diesel::deserialize::Result<Signature> {
-            let value = match <Vec<u8> as FromSql<Binary, Sqlite>>::from_sql(bytes)?.try_into() {
-                Ok(value) => value,
-                Err(e) => return Err(format!("Invalid Signature size").into()),
-            };
-
-            Ok(Signature(value))
-        }
-    }
-
-    impl ToSql<Binary, Sqlite> for Signature {
-        fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Sqlite>) -> serialize::Result {
-            out.set_value(&self.0[..]);
-            Ok(IsNull::No)
-        }
-    }
-
-    impl FromSql<Binary, Sqlite> for PublicKey {
-        fn from_sql(bytes: SqliteValue) -> diesel::deserialize::Result<PublicKey> {
-            let value = match <Vec<u8> as FromSql<Binary, Sqlite>>::from_sql(bytes)?.try_into() {
-                Ok(value) => value,
-                Err(e) => return Err(format!("Invalid PublicKey size").into()),
-            };
-
-            Ok(PublicKey(value))
-        }
-    }
-
-    impl ToSql<Binary, Sqlite> for PublicKey {
-        fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Sqlite>) -> serialize::Result {
-            out.set_value(&self.0[..]);
-            Ok(IsNull::No)
-        }
-    }
-}
+#[derive(Debug, Hash, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Signature(#[serde(with = "serde_bytes")] pub(super) [u8; 64]);
 
 impl Display for Signature {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -204,7 +141,6 @@ impl SurrealValue for Signature {
     }
 
     fn into_value(self) -> surrealdb::types::Value {
-        // surrealdb::types::Value::Bytes(bytes::Bytes::from_owner(self).into())
         surrealdb::types::Value::String(self.as_base64())
     }
 

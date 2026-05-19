@@ -3,13 +3,10 @@ use std::marker::PhantomData;
 use freya::{prelude::*, query::*, radio::RadioStation};
 
 use crate::{
-    db::{Magnet, follow_index::IndexFollow, index::tags::IndexTag},
-    errors::{DatabaseError, TorrentError},
+    db::{follow_index::IndexFollow, index::tags::IndexTag},
+    errors::DatabaseError,
     types::{Hash, Timestamp},
-    ui::{
-        AppChannel, AppState, ResourceState,
-        queries::{FetchTorrentStatus, GetFollowContent},
-    },
+    ui::{AppChannel, AppState, ResourceState, queries::GetFollowContent},
 };
 
 #[derive(PartialEq, Eq, Clone, Hash)]

@@ -1,10 +1,11 @@
-use std::{fmt::Debug, hash::Hash, path::PathBuf};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use std::{fmt::Debug, hash::Hash};
 use surrealdb_types::SurrealValue;
 use uuid::Uuid;
 
 use crate::{
     db::{ToBytes, event::EventType},
-    helpers::{Byteable, Language},
+    helpers::Language,
 };
 
 // ==================== End Imports ====================
@@ -12,8 +13,14 @@ use crate::{
 pub trait IndexTag: Send + Clone + Debug + PartialEq + Eq + Hash + 'static {
     const TAG: &'static str; // Acts like table name
     const CONTENT_TABLE: &'static str;
-    type ExtraMetadata: Send + Clone + Debug + ToBytes + Byteable + SurrealValue;
-    type ExternalSourceType: Debug + Clone + SurrealValue + Byteable + ToBytes + PartialEq;
+    type ExtraMetadata: Send + Clone + Debug + ToBytes + Serialize + DeserializeOwned + SurrealValue;
+    type ExternalSourceType: Debug
+        + Clone
+        + SurrealValue
+        + Serialize
+        + DeserializeOwned
+        + ToBytes
+        + PartialEq;
 
     const EVENT_TYPE: EventType;
     const CONTENT_EVENT_TYPE: EventType;
@@ -25,27 +32,9 @@ pub trait IndexTag: Send + Clone + Debug + PartialEq + Eq + Hash + 'static {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MangaTag;
 
-#[derive(Debug, PartialEq, Clone, SurrealValue)]
+#[derive(Debug, PartialEq, Clone, SurrealValue, Serialize, Deserialize)]
 pub enum ChapterExternalSource {
     MangaDex(Uuid),
-}
-
-impl Byteable for ChapterExternalSource {
-    async fn encode<W: tokio::io::AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-    ) -> Result<(), crate::errors::EncodeError> {
-        todo!()
-    }
-
-    async fn decode<R: tokio::io::AsyncRead + Unpin + Send>(
-        reader: &mut R,
-    ) -> Result<Self, crate::errors::DecodeError>
-    where
-        Self: Sized,
-    {
-        todo!()
-    }
 }
 
 impl ToBytes for ChapterExternalSource {
@@ -67,7 +56,7 @@ impl IndexTag for MangaTag {
 }
 
 // ==================== Manga Chapter ====================
-#[derive(Debug, Clone, SurrealValue, byteable_derive::Byteable)]
+#[derive(Debug, Clone, SurrealValue, Serialize, Deserialize)]
 pub struct MangaChapter {
     pub language: Language,
 }

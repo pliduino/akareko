@@ -14,7 +14,7 @@ use surrealdb::types::SurrealValue;
 
 use crate::{
     db::{Timestamp, ToBytes},
-    types::{PrivateKey, PublicKey, Signable, Signature, String8},
+    types::{PrivateKey, PublicKey, Signable, Signature},
 };
 
 #[cfg(feature = "sqlite")]
@@ -73,22 +73,7 @@ impl Display for TrustLevel {
     }
 }
 
-#[derive(
-    Debug,
-    Clone,
-    Serialize,
-    Deserialize,
-    Hash,
-    PartialEq,
-    SurrealValue,
-    Eq,
-    byteable_derive::Byteable,
-)]
-#[cfg_attr(
-    feature = "diesel",
-    sql_type = "diesel::sql_types::Text",
-    derive(FromSqlRow, AsExpression)
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, SurrealValue, Eq)]
 pub struct I2PAddress(String);
 
 impl I2PAddress {
@@ -121,27 +106,28 @@ impl Display for I2PAddress {
     }
 }
 
-#[derive(Debug, Clone, byteable_derive::Byteable)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "surrealdb", derive(SurrealValue))]
 pub struct User {
     #[cfg_attr(feature = "surrealdb", surreal(rename = "id"))]
     pub_key: PublicKey,
-    name: String8,
+    name: String,
     timestamp: Timestamp,
     signature: Signature,
-    /// To prevent a user from faking the address of another user we need to  confirm the address
-    /// by directly querying the address and asking for confirmation.
-    /// To check if the address has been confirmed, we check the trust level.
+    /// To prevent a user from faking the address of another user we need to
+    /// confirm the address by directly querying the address and asking for
+    /// confirmation. To check if the address has been confirmed, we check
+    /// the trust level.
     address: I2PAddress,
 
     // Unsigned fields
-    #[byteable(skip)]
+    #[serde(skip)]
     trust: TrustLevel,
 }
 
 // Convert "<table>:<base64>" -> PublicKey
-// pub fn deserialize_pubkey_id<'de, D>(deserializer: D) -> Result<PublicKey, D::Error>
-// where
+// pub fn deserialize_pubkey_id<'de, D>(deserializer: D) -> Result<PublicKey,
+// D::Error> where
 //     D: Deserializer<'de>,
 // {
 //     let id = RecordId::deserialize(deserializer)?;
@@ -150,11 +136,11 @@ pub struct User {
 //     let trimmed = key.trim_start_matches("`").trim_end_matches("`");
 
 //     PublicKey::from_base64(&trimmed)
-//         .map_err(|e| serde::de::Error::custom(format!("Invalid public key: {}", e)))
-// }
+//         .map_err(|e| serde::de::Error::custom(format!("Invalid public key:
+// {}", e))) }
 
-// pub fn deserialize_signature_id<'de, D>(deserializer: D) -> Result<Signature, D::Error>
-// where
+// pub fn deserialize_signature_id<'de, D>(deserializer: D) -> Result<Signature,
+// D::Error> where
 //     D: Deserializer<'de>,
 // {
 //     let id = RecordId::deserialize(deserializer)?;
@@ -162,8 +148,8 @@ pub struct User {
 //     let trimmed = key.trim_start_matches("`").trim_end_matches("`");
 
 //     Signature::from_base64(&trimmed)
-//         .map_err(|e| serde::de::Error::custom(format!("Invalid signature: {}", e)))
-// }
+//         .map_err(|e| serde::de::Error::custom(format!("Invalid signature:
+// {}", e))) }
 
 impl std::hash::Hash for User {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -189,7 +175,7 @@ impl User {
     pub const TABLE_NAME: &str = "users";
 
     pub fn new(
-        name: String8,
+        name: String,
         timestamp: Timestamp,
         pub_key: PublicKey,
         signature: Signature,
@@ -206,7 +192,7 @@ impl User {
     }
 
     pub fn new_signed(
-        name: String8,
+        name: String,
         timestamp: Timestamp,
         priv_key: &PrivateKey,
         address: I2PAddress,
@@ -223,7 +209,7 @@ impl User {
     }
 
     pub fn verification_bytes(&self) -> Vec<u8> {
-        let mut bytes = self.name.inner().as_bytes().to_vec();
+        let mut bytes = self.name.as_bytes().to_vec();
         bytes.extend(self.timestamp.to_bytes());
         bytes.extend(self.address.inner().as_bytes());
         bytes

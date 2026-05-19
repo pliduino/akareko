@@ -16,6 +16,7 @@
       nixpkgs,
       flake-utils,
       rust-overlay,
+      ...
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
@@ -35,11 +36,22 @@
 
         libPaths = pkgs.lib.makeLibraryPath dlopenLibraries;
       in
+      with pkgs;
       {
-        devShell = pkgs.mkShell {
-          buildInputs = with pkgs; [
+        devShells.default = mkShell {
+          buildInputs = [
+            (rust-bin.selectLatestNightlyWith (
+              toolchain:
+              toolchain.default.override {
+                extensions = [
+                  "rust-analyzer"
+                  "rust-src"
+                ];
+              }
+            ))
+
+            # Libraries
             openssl
-            # sqlite
             glib
             freetype
             fontconfig
@@ -50,28 +62,28 @@
             libayatana-appindicator
           ];
 
-          nativeBuildInputs = with pkgs; [
-            rust-bin.nightly.latest.default
+          nativeBuildInputs = [
             pkg-config
             libxkbcommon
             makeWrapper
             libGL
             wayland
             xdotool
-
             clang
             clang-tools
             boost
-            rust-analyzer
             boost-build
             dioxus-cli
             lld
           ];
 
-          RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
+          # Environment variables
+          RUST_SRC_PATH = rustPlatform.rustLibSrc;
 
-          env.RUSTFLAGS = "-C link-arg=-Wl,-rpath,${libPaths}";
-          env.LD_LIBRARY_PATH = libPaths;
+          env = {
+            RUSTFLAGS = "-C link-arg=-Wl,-rpath,${libPaths}";
+            LD_LIBRARY_PATH = libPaths;
+          };
         };
       }
     );

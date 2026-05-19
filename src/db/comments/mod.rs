@@ -1,8 +1,9 @@
+use serde::{Deserialize, Serialize};
 use surrealdb::types::SurrealValue;
 
 use crate::{
     db::{Timestamp, ToBytes},
-    types::{PublicKey, Signature, String16, Topic},
+    types::{PublicKey, Signature, Topic},
 };
 
 // ==================== End Imports ====================
@@ -16,25 +17,18 @@ mod surreal;
 //     pub timestamp: Timestamp,
 // }
 
-#[derive(Debug, Clone, SurrealValue, byteable_derive::Byteable)]
+#[derive(Debug, Clone, SurrealValue, Serialize, Deserialize)]
 pub struct Post {
     #[surreal(rename = "id")]
     pub signature: Signature,
 
-    // #[cfg_attr(
-    //     feature = "surrealdb",
-    //     serde(
-    //         serialize_with = "serialize_pubkey_as_user_id",
-    //         deserialize_with = "deserialize_record_id_as_pubkey",
-    //     )
-    // )]
     /// Who posted
     pub source: PublicKey,
 
     pub topic: Topic,
 
     pub timestamp: Timestamp,
-    pub content: String16,
+    pub content: String,
 }
 
 impl std::hash::Hash for Post {
@@ -43,16 +37,16 @@ impl std::hash::Hash for Post {
     }
 }
 
-// fn serialize_pubkey_as_user_id<S>(key: &PublicKey, serializer: S) -> Result<S::Ok, S::Error>
-// where
+// fn serialize_pubkey_as_user_id<S>(key: &PublicKey, serializer: S) ->
+// Result<S::Ok, S::Error> where
 //     S: serde::Serializer,
 // {
-//     let record_id = RecordId::from_table_key(User::TABLE_NAME, key.to_base64());
-//     record_id.serialize(serializer)
+//     let record_id = RecordId::from_table_key(User::TABLE_NAME,
+// key.to_base64());     record_id.serialize(serializer)
 // }
 
-// fn deserialize_record_id_as_pubkey<'de, D>(deserializer: D) -> Result<PublicKey, D::Error>
-// where
+// fn deserialize_record_id_as_pubkey<'de, D>(deserializer: D) ->
+// Result<PublicKey, D::Error> where
 //     D: serde::Deserializer<'de>,
 // {
 //     let id = RecordId::deserialize(deserializer)?;
@@ -66,7 +60,7 @@ impl Post {
     pub const TABLE_NAME: &str = "posts";
 
     pub fn new(
-        content: String16,
+        content: String,
         timestamp: Timestamp,
         source: PublicKey,
         topic: Topic,
@@ -82,7 +76,7 @@ impl Post {
     }
 
     pub fn new_signed(
-        content: String16,
+        content: String,
         timestamp: Timestamp,
         topic: Topic,
         priv_key: &crate::types::PrivateKey,
@@ -100,7 +94,7 @@ impl Post {
 
     fn sign_bytes(&self) -> Vec<u8> {
         let mut bytes: Vec<u8> = self.topic.inner().to_vec();
-        bytes.extend(self.content.inner().as_bytes());
+        bytes.extend(self.content.as_bytes());
         bytes.extend(self.timestamp.to_bytes());
         bytes
     }

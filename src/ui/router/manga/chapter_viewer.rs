@@ -1,4 +1,4 @@
-use std::{cell::RefCell, marker::PhantomData, path::PathBuf, rc::Rc};
+use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
 use async_zip::tokio::read::seek::ZipFileReader;
 use freya::{

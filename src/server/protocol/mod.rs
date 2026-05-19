@@ -1,13 +1,14 @@
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use serde::{Deserialize, Serialize};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
     errors::{ClientError, DecodeError, EncodeError},
-    helpers::Byteable,
+    helpers::{AkarekoRead, AkarekoWrite},
     server::handler::{AkarekoProtocolCommand, AkarekoProtocolCommandMetadata},
 };
 
 #[repr(u8)]
-#[derive(Debug, Clone, byteable_derive::Byteable)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AkarekoProtocolVersion {
     V1 = 1,
 }
@@ -45,12 +46,12 @@ impl AkarekoStatus {
     }
 }
 
-impl Byteable for AkarekoStatus {
+impl AkarekoWrite for AkarekoStatus {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
     ) -> Result<(), EncodeError> {
-        writer.write_u16(self.code()).await?;
+        self.code().encode(writer).await?;
 
         match self {
             AkarekoStatus::Ok => (),
@@ -67,9 +68,14 @@ impl Byteable for AkarekoStatus {
 
         Ok(())
     }
+}
 
-    async fn decode<R: AsyncRead + Unpin + Send>(reader: &mut R) -> Result<Self, DecodeError> {
-        let code = reader.read_u16().await?;
+impl AkarekoRead for AkarekoStatus {
+    async fn decode<R: AsyncRead + Unpin + Send>(reader: &mut R) -> Result<Self, DecodeError>
+    where
+        Self: Sized,
+    {
+        let code: u16 = u16::decode(reader).await?;
 
         let status = match code {
             Self::OK_CODE => AkarekoStatus::Ok,
@@ -103,11 +109,11 @@ enum Either<A, B> {
 }
 
 // TODO: Later try to change the vec to a stream
-pub(super) struct StreamDecode<D: Byteable> {
+pub(super) struct StreamDecode<D: AkarekoRead + AkarekoWrite> {
     d: Either<Vec<D>, u64>,
 }
 
-impl<D: Byteable> StreamDecode<D> {
+impl<D: AkarekoRead + AkarekoWrite> StreamDecode<D> {
     pub fn new(data: Vec<D>) -> Self {
         Self { d: Either::A(data) }
     }
@@ -141,7 +147,7 @@ impl<D: Byteable> StreamDecode<D> {
     }
 }
 
-impl<D: Byteable> Byteable for StreamDecode<D> {
+impl<D: AkarekoRead + AkarekoWrite> AkarekoWrite for StreamDecode<D> {
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
@@ -160,7 +166,9 @@ impl<D: Byteable> Byteable for StreamDecode<D> {
 
         Ok(())
     }
+}
 
+impl<D: AkarekoRead + AkarekoWrite> AkarekoRead for StreamDecode<D> {
     async fn decode<R: AsyncRead + Unpin + Send>(reader: &mut R) -> Result<Self, DecodeError> {
         Ok(StreamDecode {
             d: Either::B(u64::decode(reader).await?),
@@ -168,13 +176,16 @@ impl<D: Byteable> Byteable for StreamDecode<D> {
     }
 }
 
-pub(super) struct AkarekoProtocolResponse<P: Byteable, D: Byteable = ()> {
+pub(super) struct AkarekoProtocolResponse<
+    P: AkarekoRead + AkarekoWrite,
+    D: AkarekoRead + AkarekoWrite = (),
+> {
     status: AkarekoStatus,
     payload: Option<P>, // None if status is an error
     data: StreamDecode<D>,
 }
 
-impl<P: Byteable> AkarekoProtocolResponse<P, ()> {
+impl<P: AkarekoRead + AkarekoWrite> AkarekoProtocolResponse<P, ()> {
     pub fn ok(payload: P) -> Self {
         Self {
             status: AkarekoStatus::Ok,
@@ -184,7 +195,7 @@ impl<P: Byteable> AkarekoProtocolResponse<P, ()> {
     }
 }
 
-impl<P: Byteable, D: Byteable> AkarekoProtocolResponse<P, D> {
+impl<P: AkarekoRead + AkarekoWrite, D: AkarekoRead + AkarekoWrite> AkarekoProtocolResponse<P, D> {
     pub fn ok_with_data(payload: P, data: Vec<D>) -> Self {
         Self {
             status: AkarekoStatus::Ok,
@@ -254,7 +265,9 @@ impl<C: AkarekoProtocolCommand + AkarekoProtocolCommandMetadata> AkarekoProtocol
     }
 }
 
-impl<P: Byteable, D: Byteable> Byteable for AkarekoProtocolResponse<P, D> {
+impl<P: AkarekoRead + AkarekoWrite, D: AkarekoRead + AkarekoWrite> AkarekoWrite
+    for AkarekoProtocolResponse<P, D>
+{
     async fn encode<W: AsyncWrite + Unpin + Send>(
         &self,
         writer: &mut W,
@@ -267,7 +280,11 @@ impl<P: Byteable, D: Byteable> Byteable for AkarekoProtocolResponse<P, D> {
 
         Ok(())
     }
+}
 
+impl<P: AkarekoRead + AkarekoWrite, D: AkarekoRead + AkarekoWrite> AkarekoRead
+    for AkarekoProtocolResponse<P, D>
+{
     async fn decode<R: AsyncRead + Unpin + Send>(reader: &mut R) -> Result<Self, DecodeError> {
         let status = AkarekoStatus::decode(reader).await?;
 

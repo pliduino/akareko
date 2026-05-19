@@ -4,7 +4,6 @@ use tokio::sync::watch;
 
 use crate::{
     errors::TorrentError,
-    types::Hash,
     ui::{AppChannel, AppState, ResourceState},
 };
 
@@ -16,7 +15,7 @@ impl QueryCapability for FetchTorrentWatchers {
     type Err = TorrentError;
     type Keys = ();
 
-    async fn run(&self, keys: &Self::Keys) -> Result<Self::Ok, Self::Err> {
+    async fn run(&self, _keys: &Self::Keys) -> Result<Self::Ok, Self::Err> {
         let radio = try_consume_root_context::<RadioStation<AppState, AppChannel>>();
         let Some(radio) = radio else {
             return Err(TorrentError::NotInitialized);

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use anawt::{AnawtTorrentStatus, InfoHash, RemoveFlags, TorrentState};
+use anawt::{AnawtTorrentStatus, RemoveFlags, TorrentState};
 use freya::{
     prelude::*,
     query::{Mutation, Query, QueryStateData, use_mutation, use_query},
@@ -53,7 +53,7 @@ impl TorrentEntry {
 }
 
 impl PartialEq for TorrentEntry {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _other: &Self) -> bool {
         // self.watcher.same_channel(&other.watcher)
         true
     }

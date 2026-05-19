@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{
     db::{
         index::{Index, tags::IndexTag},
@@ -35,7 +37,7 @@ impl<I: IndexTag> AkarekoProtocolCommand for GetIndexes<I> {
     }
 }
 
-#[derive(byteable_derive::Byteable)]
+#[derive(Serialize, Deserialize)]
 pub struct GetIndexesRequest {
     indexes: Vec<Hash>,
 }
@@ -46,5 +48,5 @@ impl GetIndexesRequest {
     }
 }
 
-#[derive(byteable_derive::Byteable)]
+#[derive(Serialize, Deserialize)]
 pub struct GetIndexesResponse {}

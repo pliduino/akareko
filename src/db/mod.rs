@@ -1,9 +1,4 @@
-#[cfg(feature = "diesel")]
-use diesel::SqliteConnection;
-#[cfg(feature = "diesel")]
-use diesel_async::pooled_connection::{AsyncDieselConnectionManager, bb8::Pool};
-#[cfg(feature = "diesel")]
-use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
+use skerry::skerry;
 use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
@@ -12,7 +7,6 @@ use surrealdb::{
     engine::local::{Db, SurrealKv},
 };
 use surrealdb_types::SurrealValue;
-use tokio::io::{AsyncRead, AsyncWrite};
 use tracing::info;
 
 #[cfg(feature = "surrealdb")]
@@ -22,8 +16,6 @@ use crate::db::{
     follow_index::IndexFollow,
     index::tags::{IndexTag, MangaTag},
 };
-// use crate::db::{comments::PostRepository,
-// follow_index::IndexFollowRepository};
 use crate::errors::DatabaseError;
 use crate::types::Timestamp;
 use crate::{
@@ -32,8 +24,6 @@ use crate::{
         index::IndexRepository,
         user::{User, UserRepository},
     },
-    errors::{DecodeError, EncodeError},
-    helpers::Byteable,
 };
 use crate::{db::index::content::Content, types::PublicKey};
 
@@ -77,56 +67,15 @@ impl ToBytes for String {
 #[serde(transparent)]
 pub struct Magnet(pub String);
 
-impl Byteable for Magnet {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-    ) -> Result<(), EncodeError> {
-        self.0.encode(writer).await
-    }
-
-    async fn decode<R: AsyncRead + Unpin + Send>(reader: &mut R) -> Result<Self, DecodeError> {
-        Ok(Magnet(String::decode(reader).await?))
-    }
-}
-
-#[cfg(feature = "sqlite")]
-type Connection = SyncConnectionWrapper<SqliteConnection>;
-
-#[cfg(feature = "sqlite")]
-type DbPool = Pool<Connection>;
-
 #[derive(Clone)]
 pub struct Repositories {
     #[cfg(feature = "surrealdb")]
     pub db: Surreal<Db>,
-    #[cfg(feature = "sqlite")]
-    pub db: DbPool,
 }
 
 impl std::fmt::Debug for Repositories {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Repositories").finish()
-    }
-}
-
-#[cfg(feature = "sqlite")]
-impl Repositories {
-    pub async fn initialize(config: Arc<RwLock<AkarekoConfig>>) -> Self {
-        use diesel_async::{AsyncConnection, pooled_connection::AsyncDieselConnectionManager};
-
-        let manager = AsyncDieselConnectionManager::new("./database/sqlite.db");
-        let db = DbPool::builder().build(manager).await.unwrap();
-
-        Self { db }
-    }
-
-    pub fn user(&self) -> UserRepository {
-        UserRepository::new(self.db.clone())
-    }
-
-    pub fn index(&self) -> IndexRepository {
-        IndexRepository::new(self.db.clone())
     }
 }
 
@@ -153,6 +102,7 @@ impl FullSyncTarget {
 }
 
 #[cfg(feature = "surrealdb")]
+#[skerry]
 impl Repositories {
     /// Use Repositories::initialize() instead, this function is only so we can
     /// run tests without setting a user and in memory
@@ -201,10 +151,10 @@ impl Repositories {
             let user_repository = repositories.user();
             match user_repository.get_user(&config.public_key()).await {
                 Err(_) => {
-                    use crate::{db::user::TrustLevel, types::String8};
+                    use crate::db::user::TrustLevel;
 
                     let mut user = User::new_signed(
-                        String8::new("Anon".to_string()).unwrap(),
+                        "Anon".to_string(),
                         Timestamp::now(),
                         &config.private_key(),
                         config.eepsite_address().clone(),
@@ -234,7 +184,7 @@ impl Repositories {
         Ok(())
     }
 
-    pub async fn remove_full_sync_address(&self, pub_key: PublicKey) -> Result<(), DatabaseError> {
+    pub async fn remove_full_sync_address(&self, pub_key: PublicKey) -> Result<(), e![Surreal]> {
         use surrealdb_types::{RecordId, Value};
         let _: Option<Value> = self
             .db
@@ -246,7 +196,7 @@ impl Repositories {
         Ok(())
     }
 
-    pub async fn full_sync_addresses(&self) -> Result<Vec<FullSyncTarget>, DatabaseError> {
+    pub async fn full_sync_addresses(&self) -> Result<Vec<FullSyncTarget>, e![Surreal]> {
         let addresses: Vec<FullSyncTarget> = self.db.select(FullSyncTarget::TABLE_NAME).await?;
         Ok(addresses)
     }
@@ -266,10 +216,11 @@ impl Repositories {
 
 #[cfg(feature = "surrealdb")]
 mod surreal {
+    use serde::{Deserialize, Serialize};
     use std::marker::PhantomData;
     use surrealdb_types::SurrealValue;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct SurrealPhantom<T>(PhantomData<T>);
 
     impl<T> Default for SurrealPhantom<T> {

@@ -1,13 +1,13 @@
 use std::num::NonZero;
 
 use serde::{Deserialize, Serialize};
+use skerry::skerry;
 use tokio::fs;
 use tracing::{error, warn};
 use yosemite::RouterApi;
 
 use crate::{
     db::user::I2PAddress,
-    errors::TomlSaveError,
     helpers::b32_from_pub_b64,
     types::{PrivateKey, PublicKey, Timestamp},
 };
@@ -147,10 +147,11 @@ impl Default for AkarekoConfig {
     }
 }
 
+#[skerry]
 impl AkarekoConfig {
-    pub async fn save(&self) -> Result<(), TomlSaveError> {
+    pub async fn save(&self) -> Result<(), e![TomlSer, TokioIo]> {
         let config = toml::to_string(self)?;
-        fs::write("config.toml", config).await?;
+        fs::write("config.toml", config).await.unwrap();
         Ok(())
     }
 
@@ -189,7 +190,7 @@ impl AkarekoConfig {
             match config.save().await {
                 Ok(_) => {}
                 Err(e) => {
-                    error!("error saving config: {}", e);
+                    error!("error saving config: ");
                 }
             }
         }
@@ -228,7 +229,7 @@ impl AkarekoConfig {
     pub fn set_zoom(&mut self, zoom: u16) {
         match NonZero::new(zoom) {
             Some(v) => self.image_viewer_preferences.zoom = v,
-            // SAFETY: 1 is not 0
+            // SAFETY: 1 is not 0 duh
             None => self.image_viewer_preferences.zoom = unsafe { NonZero::new_unchecked(1) },
         }
     }
@@ -257,7 +258,7 @@ impl AkarekoConfig {
         self.is_relay
     }
 
-    pub fn set_is_relay(&mut self, is_relay: bool) {
-        self.is_relay = is_relay;
-    }
+    // pub fn set_is_relay(&mut self, is_relay: bool) {
+    //     self.is_relay = is_relay;
+    // }
 }

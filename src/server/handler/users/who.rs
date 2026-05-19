@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{
     db::{
         ToBytes,
@@ -44,10 +46,10 @@ impl AkarekoProtocolCommand for Who {
     }
 }
 
-#[derive(Debug, byteable_derive::Byteable)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WhoRequest {}
 
-#[derive(Debug, byteable_derive::Byteable)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WhoResponse {
     pub user: User,
     pub timestamp: Timestamp,

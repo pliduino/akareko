@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use freya::{
     elements::image::image,
     prelude::*,

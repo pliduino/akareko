@@ -2,7 +2,6 @@ use anawt::{InfoHash, RemoveFlags};
 use freya::{prelude::*, query::*, radio::RadioStation};
 
 use crate::{
-    db::Magnet,
     errors::TorrentError,
     ui::{
         AppChannel, AppState, ResourceState,

@@ -1,4 +1,5 @@
 use fastbloom::BloomFilter;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     db::{
@@ -37,7 +38,7 @@ impl<I: IndexTag> AkarekoProtocolCommand for GetAllIndexes<I> {
     }
 }
 
-#[derive(byteable_derive::Byteable)]
+#[derive(Serialize, Deserialize)]
 pub struct GetAllIndexesRequest {
     tag: String,
     /// Get indexes created_updated after this timestamp
@@ -55,5 +56,5 @@ impl GetAllIndexesRequest {
     }
 }
 
-#[derive(byteable_derive::Byteable)]
+#[derive(Serialize, Deserialize)]
 pub struct GetAllIndexesResponse {}

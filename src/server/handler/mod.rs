@@ -2,8 +2,8 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
     db::{index::tags::MangaTag, user::I2PAddress},
-    errors::{ClientError, DecodeError, EncodeError, ServerError},
-    helpers::Byteable,
+    errors::{ClientError, EncodeError, ServerError},
+    helpers::{AkarekoRead, AkarekoWrite},
     server::{
         ServerState,
         protocol::{AkarekoProtocolRequest, AkarekoProtocolResponse, AkarekoProtocolVersion},
@@ -19,24 +19,26 @@ pub mod events {
 pub mod post {
     mod get_posts_by_topic;
     pub use get_posts_by_topic::{
-        GetPostsByTopic, GetPostsByTopicRequest, GetPostsByTopicResponse,
+        GetPostsByTopic,
+        // GetPostsByTopicRequest, GetPostsByTopicResponse,
     };
 }
 pub mod relay {
     mod post_content;
-    pub use post_content::{PostContentRequest, PostContentResponse, SendContent};
+    // pub use post_content::{PostContentRequest, PostContentResponse,
+    // SendContent};
 }
 pub mod users;
 
 /// Marker implemented by the handler macro
-pub trait CommandEnum: Byteable {}
+pub trait CommandEnum: AkarekoRead + AkarekoWrite {}
 
 /// Should be implemented by each command, can be skipped by directly
 /// implementing [`AkarekoProtocolCommandHandler`]
 pub(super) trait AkarekoProtocolCommand: Sized {
-    type RequestPayload: Byteable;
-    type ResponsePayload: Byteable;
-    type ResponseData: Byteable;
+    type RequestPayload: AkarekoRead + AkarekoWrite;
+    type ResponsePayload: AkarekoRead + AkarekoWrite;
+    type ResponseData: AkarekoRead + AkarekoWrite;
 
     async fn process(
         req: Self::RequestPayload,
@@ -107,7 +109,7 @@ pub trait AkarekoProtocolCommandMetadata {
 }
 
 pub trait AkarekoMiddleware {
-    fn apply(
+    fn apply_middleware(
         state: &ServerState,
         address: &I2PAddress,
     ) -> impl Future<Output = Result<(), ServerError>>;
@@ -115,7 +117,10 @@ pub trait AkarekoMiddleware {
 
 struct RelayMiddleware;
 impl AkarekoMiddleware for RelayMiddleware {
-    async fn apply(state: &ServerState, _address: &I2PAddress) -> Result<(), ServerError> {
+    async fn apply_middleware(
+        state: &ServerState,
+        _address: &I2PAddress,
+    ) -> Result<(), ServerError> {
         if !state.config.read().await.is_relay() {
             return Err(ServerError::RelayNotEnabled);
         }
@@ -134,7 +139,7 @@ crate::handler!(V1,
     // ==================== Index ====================
     GetAllIndexes("manga/get_all_indexes") => index::GetAllIndexes<MangaTag>,
     GetIndexes("manga/get_indexes") => index::GetIndexes<MangaTag>,
-    GetContents("manga/get_contents") => index::GetContents<MangaTag>,
+    GetContents("manga/get_contents", RelayMiddleware) => index::GetContents<MangaTag>,
 
     // ==================== Post ====================
     GetPostsByTopic("post/get_posts_by_topic") => post::GetPostsByTopic,

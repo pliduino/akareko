@@ -12,37 +12,37 @@ macro_rules! handler {
             pub struct $version;
 
             #[repr(u8)]
-            #[derive(Debug, Clone)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
             pub enum [<Commands $version>] {
                 $(
                     $command,
                 )*
             }
             impl CommandEnum for [<Commands $version>] {}
-            impl Byteable for [<Commands $version>] {
-                async fn encode<W: AsyncWrite + Unpin + Send>(
-                    &self,
-                    writer: &mut W,
-                ) -> Result<(), EncodeError> {
-                    match self {
-                        $(
-                            [<Commands $version>]::$command => $cmd_discriminant.to_string().encode(writer).await,
-                        )*
-                    }
-                }
+            // impl Byteable for [<Commands $version>] {
+            //     async fn encode<W: AsyncWrite + Unpin + Send>(
+            //         &self,
+            //         writer: &mut W,
+            //     ) -> Result<(), EncodeError> {
+            //         match self {
+            //             $(
+            //                 [<Commands $version>]::$command => $cmd_discriminant.to_string().encode(writer).await,
+            //             )*
+            //         }
+            //     }
 
-                async fn decode<R: AsyncRead + Unpin + Send>(reader: &mut R) -> Result<Self, DecodeError> {
-                    Ok(match String::decode(reader).await?.as_str() {
-                        $(
-                            $cmd_discriminant => [<Commands $version>]::$command,
-                        )*
-                        s => return Err(DecodeError::InvalidEnumVariant {
-                            variant_value: s.to_string(),
-                            enum_name: stringify!([<Commands $version>]),
-                        }),
-                    })
-                }
-            }
+            //     async fn decode<R: AsyncRead + Unpin + Send>(reader: &mut R) -> Result<Self, DecodeError> {
+            //         Ok(match String::decode(reader).await?.as_str() {
+            //             $(
+            //                 $cmd_discriminant => [<Commands $version>]::$command,
+            //             )*
+            //             s => return Err(DecodeError::InvalidEnumVariant {
+            //                 variant_value: s.to_string(),
+            //                 enum_name: stringify!([<Commands $version>]),
+            //             }),
+            //         })
+            //     }
+            // }
 
             $(
                 impl AkarekoProtocolCommandMetadata for $handler {
@@ -64,7 +64,7 @@ macro_rules! handler {
                         $(
                             [<Commands $version>]::$command => {
                                 $(
-                                    $middleware.apply(state, address).await.unwrap();
+                                    <$middleware as AkarekoMiddleware>::apply_middleware(state, address).await.unwrap();
                                 )*
                                 <$handler as AkarekoProtocolCommandHandler>::handle(stream, state, address).await;
                             }

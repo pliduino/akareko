@@ -1,8 +1,7 @@
-use std::{marker::PhantomData, time::Duration};
+use std::time::Duration;
 
 use anawt::InfoHash;
 use freya::{prelude::*, query::*};
-use tracing::trace;
 
 use crate::{
     db::index::{

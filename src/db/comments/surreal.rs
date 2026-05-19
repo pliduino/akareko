@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use const_format::formatcp;
 use fastbloom::BloomFilter;
+use skerry::skerry;
 use surrealdb_types::{RecordId, SurrealValue};
 use tracing::info;
 
@@ -16,6 +17,7 @@ use crate::{
     types::{Signature, Timestamp},
 };
 
+#[skerry]
 impl Repositories {
     pub async fn add_post(&self, post: Post) -> Result<Post, DatabaseError> {
         let transaction = self.db.clone().begin().await?;
@@ -111,7 +113,7 @@ impl Repositories {
         &self,
         topic: Topic,
         timestamp: Option<Timestamp>,
-    ) -> Result<BloomFilter, DatabaseError> {
+    ) -> Result<BloomFilter, e![Surreal]> {
         let query_str: String = format!(
             "
                 SELECT * FROM {0} WHERE topic = $topic {1};
@@ -139,7 +141,7 @@ impl Repositories {
         Ok(filter)
     }
 
-    pub async fn get_posts(&self, signatures: &[Signature]) -> Result<Vec<Post>, DatabaseError> {
+    pub async fn get_posts(&self, signatures: &[Signature]) -> Result<Vec<Post>, e![Surreal]> {
         let ids: Vec<RecordId> = signatures
             .iter()
             .map(|s| RecordId::new(Post::TABLE_NAME, s.as_base64()))
@@ -168,7 +170,7 @@ impl Repositories {
         topic: Topic,
         timestamp: Option<Timestamp>,
         filter: Option<BloomFilter>,
-    ) -> Result<Vec<Post>, DatabaseError> {
+    ) -> Result<Vec<Post>, e![Surreal]> {
         let query_str: String = format!(
             "
                 SELECT * FROM {0} WHERE topic = $topic {1};

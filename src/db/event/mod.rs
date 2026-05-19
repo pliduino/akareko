@@ -1,17 +1,17 @@
 use fastbloom::BloomFilter;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
+use serde::{Deserialize, Serialize};
+use skerry::skerry;
 use strum_macros::EnumCount;
 use surrealdb::{Surreal, engine::local::Db, method::Transaction};
 use surrealdb_types::{SurrealValue, Value};
-use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
     db::{
         BLOOM_FILTER_FALSE_POSITIVE_RATE, Timestamp,
         index::tags::{IndexTag, MangaTag},
     },
-    errors::{DatabaseError, DecodeError, EncodeError},
-    helpers::{Byteable, Encodeable},
+    errors::DatabaseError,
     types::Topic,
 };
 
@@ -78,11 +78,12 @@ pub async fn get_paginated_events(
     Err(DatabaseError::Unknown)
 }
 
+#[skerry]
 pub async fn filter_events(
     timestamp: Timestamp,
     filter: Option<BloomFilter>,
     db: &Surreal<Db>,
-) -> Result<Vec<(EventType, Vec<Topic>)>, DatabaseError> {
+) -> Result<Vec<(EventType, Vec<Topic>)>, e![Surreal]> {
     const QUERY: &'static str = "
                 SELECT event_type, array::group(topic) AS topics FROM events WHERE timestamp >= $timestamp GROUP BY event_type;
             ";
@@ -158,6 +159,8 @@ pub async fn make_event_filter(
     TryFromPrimitive,
     SurrealValue,
     EnumCount,
+    Serialize,
+    Deserialize,
 )]
 #[repr(u8)]
 pub enum EventType {
@@ -176,29 +179,6 @@ impl EventType {
             EventType::Manga => MangaTag::TAG,
             EventType::MangaContent => MangaTag::CONTENT_TABLE,
             EventType::Post => "post",
-        }
-    }
-}
-
-impl Byteable for EventType {
-    async fn encode<W: AsyncWrite + Unpin + Send>(
-        &self,
-        writer: &mut W,
-    ) -> Result<(), EncodeError> {
-        self.as_str().encode(writer).await
-    }
-
-    async fn decode<R: AsyncRead + Unpin + Send>(reader: &mut R) -> Result<Self, DecodeError> {
-        let value = String::decode(reader).await?;
-        match value.as_str() {
-            "user" => Ok(EventType::User),
-            MangaTag::TAG => Ok(EventType::Manga),
-            MangaTag::CONTENT_TABLE => Ok(EventType::MangaContent),
-            "post" => Ok(EventType::Post),
-            _ => Err(DecodeError::InvalidEnumVariant {
-                enum_name: "EventType",
-                variant_value: value,
-            }),
         }
     }
 }

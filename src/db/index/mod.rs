@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use surrealdb_types::SurrealValue;
 use uuid::Uuid;
 
@@ -13,16 +14,12 @@ pub mod content;
 pub mod metadata;
 pub mod tags;
 
-#[cfg(feature = "sqlite")]
-mod sqlite;
-#[cfg(feature = "sqlite")]
-pub use sqlite::IndexRepository;
 #[cfg(feature = "surrealdb")]
 mod surreal;
 #[cfg(feature = "surrealdb")]
 pub use surreal::IndexRepository;
 
-#[derive(Debug, Clone, SurrealValue, byteable_derive::Byteable, PartialEq, Hash)]
+#[derive(Debug, Clone, SurrealValue, Serialize, Deserialize, PartialEq, Hash)]
 pub struct IndexLinks {
     pub myanimelist: Option<String>,
     pub mangadex: Option<Uuid>,
@@ -43,7 +40,8 @@ impl ToBytes for IndexLinks {
     }
 }
 
-#[derive(Debug, Clone, byteable_derive::Byteable)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 #[cfg_attr(feature = "surrealdb", derive(SurrealValue))]
 pub struct Index<T: IndexTag> {
     #[cfg_attr(feature = "surrealdb", surreal(rename = "id"))]
@@ -55,7 +53,6 @@ pub struct Index<T: IndexTag> {
 
     out_links: IndexLinks,
 
-    #[byteable(skip)]
     _phantom: SurrealPhantom<T>,
 }
 

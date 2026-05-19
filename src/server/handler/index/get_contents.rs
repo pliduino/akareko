@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 use fastbloom::BloomFilter;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     db::{
@@ -39,7 +40,7 @@ impl<I: IndexTag> AkarekoProtocolCommand for GetContents<I> {
     }
 }
 
-#[derive(byteable_derive::Byteable)]
+#[derive(Serialize, Deserialize)]
 pub struct GetContentsRequest {
     index: Hash,
     /// Get indexes created_updated after this timestamp
@@ -57,5 +58,5 @@ impl GetContentsRequest {
     }
 }
 
-#[derive(byteable_derive::Byteable)]
+#[derive(Serialize, Deserialize)]
 pub struct GetContentsResponse {}

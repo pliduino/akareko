@@ -1,4 +1,5 @@
 use fastbloom::BloomFilter;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     db::{
@@ -6,7 +7,7 @@ use crate::{
         index::tags::MangaTag,
         user::I2PAddress,
     },
-    helpers::Byteable,
+    helpers::{AkarekoRead as _, AkarekoWrite as _},
     server::{
         ServerState,
         handler::{
@@ -144,13 +145,13 @@ impl AkarekoProtocolCommandHandler for SyncEvents {
     }
 }
 
-#[derive(Debug, byteable_derive::Byteable)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SyncEventsRequest {
     pub timestamp: Timestamp,
     pub filter: Option<BloomFilter>,
 }
 
-#[derive(Debug, byteable_derive::Byteable)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SyncEventsResponse {
     // The opposing server checked timestamp
     pub timestamp: Timestamp,

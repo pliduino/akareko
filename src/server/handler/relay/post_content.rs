@@ -1,5 +1,7 @@
 use std::marker::PhantomData;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     db::{
         index::{content::Content, tags::IndexTag},
@@ -33,10 +35,11 @@ impl<I: IndexTag + 'static> AkarekoProtocolCommand for SendContent<I> {
     }
 }
 
-#[derive(byteable_derive::Byteable)]
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct PostContentRequest<I: IndexTag> {
     pub content: Content<I>,
 }
 
-#[derive(byteable_derive::Byteable)]
+#[derive(Serialize, Deserialize)]
 pub struct PostContentResponse {}

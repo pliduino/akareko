@@ -1,13 +1,4 @@
-use std::time::Duration;
-
-use freya::{
-    prelude::*,
-    query::{
-        Mutation, MutationCapability, QueriesStorage, Query, QueryCapability, use_mutation,
-        use_query,
-    },
-    radio::RadioStation,
-};
+use freya::{prelude::*, query::QueryCapability, radio::RadioStation};
 
 use crate::{
     db::index::{content::Content, tags::IndexTag},
