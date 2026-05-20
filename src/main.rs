@@ -4,7 +4,6 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use emissary_util::{runtime::tokio::Runtime, storage::Storage};
 use freya::{
     prelude::*,
     radio::RadioStation,
@@ -48,7 +47,8 @@ fn main() -> Result<(), ()> {
     let format = borrowed_format_items;
 
     let timer = fmt::time::LocalTime::new(format);
-    let filter = EnvFilter::builder().parse_lossy("none,akareko=trace,anawt=info");
+    let filter = EnvFilter::builder()
+        .parse_lossy("none,akareko=trace,anawt=info,emissary=info,yosemite=info");
 
     let stdout_log = fmt::layer()
         .compact()

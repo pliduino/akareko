@@ -12,7 +12,8 @@ use crate::{
     types::{PrivateKey, PublicKey, Timestamp},
 };
 
-pub const DEFAULT_SAM_PORT: u16 = 7656;
+pub const DEFAULT_SAM_TCP_PORT: u16 = 7656;
+pub const DEFAULT_SAM_UDP_PORT: u16 = 7655;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct KeyPair {
@@ -50,7 +51,8 @@ pub struct AkarekoConfig {
     #[serde(flatten)]
     keypair: KeyPair,
 
-    sam_port: u16,
+    sam_tcp_port: u16,
+    sam_udp_port: u16,
 
     eepsite_key: String,
     eepsite_address: I2PAddress,
@@ -132,7 +134,8 @@ impl Default for AkarekoConfig {
     fn default() -> Self {
         Self {
             keypair: KeyPair::new(PrivateKey::new()),
-            sam_port: DEFAULT_SAM_PORT,
+            sam_tcp_port: DEFAULT_SAM_TCP_PORT,
+            sam_udp_port: DEFAULT_SAM_UDP_PORT,
             eepsite_key: String::new(),
             eepsite_address: I2PAddress::new(""),
             dev_mode: false,
@@ -155,17 +158,12 @@ impl AkarekoConfig {
         Ok(())
     }
 
-    async fn generate_eepsite_key() -> (I2PAddress, String) {
-        let (destination, private_key) = RouterApi::default().generate_destination().await.unwrap();
-        (b32_from_pub_b64(&destination).unwrap(), private_key)
-    }
-
     /// can't fail, if the config is missing or is invalid it will just be
     /// created anyways
     pub async fn load() -> AkarekoConfig {
         let mut should_save = false;
 
-        let mut config = match fs::read_to_string("config.toml").await {
+        let config = match fs::read_to_string("config.toml").await {
             Ok(config_str) => match toml::from_str(&config_str) {
                 Ok(config) => config,
                 Err(e) => {
@@ -179,12 +177,6 @@ impl AkarekoConfig {
                 AkarekoConfig::default()
             }
         };
-
-        if config.eepsite_key.is_empty() {
-            let (address, key) = Self::generate_eepsite_key().await;
-            config.eepsite_address = address;
-            config.eepsite_key = key;
-        }
 
         if should_save {
             match config.save().await {
@@ -202,6 +194,11 @@ impl AkarekoConfig {
         &self.eepsite_key
     }
 
+    pub fn set_eepsite_data(&mut self, eepsite_address: I2PAddress, eepsite_key: String) {
+        self.eepsite_address = eepsite_address;
+        self.eepsite_key = eepsite_key;
+    }
+
     pub fn eepsite_address(&self) -> &I2PAddress {
         &self.eepsite_address
     }
@@ -210,12 +207,20 @@ impl AkarekoConfig {
         &self.scheduler_config
     }
 
-    pub fn sam_port(&self) -> u16 {
-        self.sam_port
+    pub fn sam_tcp_port(&self) -> u16 {
+        self.sam_tcp_port
     }
 
-    pub fn set_sam_port(&mut self, port: u16) {
-        self.sam_port = port;
+    pub fn set_sam_tcp_port(&mut self, port: u16) {
+        self.sam_tcp_port = port;
+    }
+
+    pub fn sam_udp_port(&self) -> u16 {
+        self.sam_udp_port
+    }
+
+    pub fn set_sam_udp_port(&mut self, port: u16) {
+        self.sam_udp_port = port;
     }
 
     pub fn image_viewer_preferences(&self) -> &ImageViewerPreferences {

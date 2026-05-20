@@ -56,8 +56,8 @@ fn criterion_benchmark(c: &mut Criterion) {
         );
     });
 
-    // group.bench_with_input(BenchmarkId::new("db_insert_", size), &users_vec, |b, v| {
-    //     b.to_async(&rt).iter(|| async { for user in v {} });
+    // group.bench_with_input(BenchmarkId::new("db_insert_", size), &users_vec, |b,
+    // v| {     b.to_async(&rt).iter(|| async { for user in v {} });
     // });
 
     group.finish();

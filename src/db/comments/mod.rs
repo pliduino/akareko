@@ -37,25 +37,6 @@ impl std::hash::Hash for Post {
     }
 }
 
-// fn serialize_pubkey_as_user_id<S>(key: &PublicKey, serializer: S) ->
-// Result<S::Ok, S::Error> where
-//     S: serde::Serializer,
-// {
-//     let record_id = RecordId::from_table_key(User::TABLE_NAME,
-// key.to_base64());     record_id.serialize(serializer)
-// }
-
-// fn deserialize_record_id_as_pubkey<'de, D>(deserializer: D) ->
-// Result<PublicKey, D::Error> where
-//     D: serde::Deserializer<'de>,
-// {
-//     let id = RecordId::deserialize(deserializer)?;
-//     let key = id.key.into_value().as_string().unwrap();
-//     let trimmed = key.trim_start_matches("`").trim_end_matches("`");
-
-//     PublicKey::from_base64(&trimmed).map_err(serde::de::Error::custom)
-// }
-
 impl Post {
     pub const TABLE_NAME: &str = "posts";
 

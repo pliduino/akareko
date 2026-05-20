@@ -2,21 +2,21 @@ use const_format::formatcp;
 use freya::{prelude::*, radio::use_radio};
 
 use crate::{
-    config::DEFAULT_SAM_PORT,
+    config::DEFAULT_SAM_TCP_PORT,
     ui::{AppChannel, DEFAULT_PAGE_PADDING, ResourceState},
 };
 
 #[derive(PartialEq)]
 pub struct Settings;
 
-const DEFAULT_SAM_PORT_STR: &'static str = formatcp!("{}", DEFAULT_SAM_PORT);
+const DEFAULT_SAM_TCP_PORT_STR: &'static str = formatcp!("{}", DEFAULT_SAM_TCP_PORT);
 impl Component for Settings {
     fn render(&self) -> impl IntoElement {
         let mut radio = use_radio(AppChannel::Config);
         let mut new_config = use_state(|| radio.read().config.unwrap_ref().clone());
 
         let sam_port_string = use_state(move || {
-            let sam_port = new_config.read().sam_port();
+            let sam_port = new_config.read().sam_tcp_port();
             sam_port.to_string()
         });
 
@@ -35,16 +35,16 @@ impl Component for Settings {
             .child("SAM Port:")
             .child(
                 Input::new(sam_port_string)
-                    .placeholder(DEFAULT_SAM_PORT_STR)
+                    .placeholder(DEFAULT_SAM_TCP_PORT_STR)
                     .on_validate(move |v: InputValidator| {
                         if v.text().is_empty() {
-                            new_config.write().set_sam_port(DEFAULT_SAM_PORT);
+                            new_config.write().set_sam_tcp_port(DEFAULT_SAM_TCP_PORT);
                             return;
                         }
 
                         let r = v.text().parse::<u16>();
                         if let Ok(port) = r {
-                            new_config.write().set_sam_port(port);
+                            new_config.write().set_sam_tcp_port(port);
                             return;
                         }
 

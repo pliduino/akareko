@@ -35,23 +35,8 @@ impl AkarekoServer {
         &self,
         config: Arc<RwLock<AkarekoConfig>>,
         repositories: Repositories,
+        mut sam_session: Session<style::Stream>,
     ) -> Result<(), ServerError> {
-        info!("Starting server SAMv3 session");
-
-        let mut sam_session = {
-            let config_guard = config.read().await;
-
-            Session::<style::Stream>::new(SessionOptions {
-                // nickname: "AuroraServer".to_string(),
-                samv3_tcp_port: config_guard.sam_port(),
-                destination: yosemite::DestinationKind::Persistent {
-                    private_key: config_guard.eepsite_key().clone(),
-                },
-                ..Default::default()
-            })
-            .await?
-        };
-
         info!("Server Started");
         // info!(
         //     "Starting server on {}",

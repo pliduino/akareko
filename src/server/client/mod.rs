@@ -88,26 +88,9 @@ macro_rules! impl_get_content {
 impl AkarekoClient {
     impl_get_content!(MangaTag, manga);
 
-    pub async fn new(config: AkarekoConfig) -> Self {
-        info!("Initializing AkarekoClient...");
-
-        let session = Arc::new(Mutex::new(
-            Session::<style::Stream>::new(SessionOptions {
-                // nickname: "AuroraClient".to_string(),
-                samv3_tcp_port: config.sam_port(),
-                destination: yosemite::DestinationKind::Persistent {
-                    private_key: config.eepsite_key().clone(),
-                },
-                ..Default::default()
-            })
-            .await
-            .unwrap(),
-        ));
-
-        info!("Initialized AkarekoClient");
-
+    pub async fn new(sam_session: Session<style::Stream>, config: AkarekoConfig) -> Self {
         Self {
-            session,
+            session: Arc::new(Mutex::new(sam_session)),
             host_address: config.eepsite_address().clone(),
         }
     }
